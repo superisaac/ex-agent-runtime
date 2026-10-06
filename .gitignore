@@ -1,0 +1,54 @@
+# 编译产物
+/_build/
+/cover/
+/deps/
+/doc/
+/.fetch
+erl_crash.dump
+*.ez
+*.beam
+/config/*.secret.exs
+.elixir_ls/
+
+# 依赖锁文件（视项目类型决定是否忽略）
+# 对于应用程序，通常应提交 mix.lock
+# 对于库，通常也应提交 mix.lock
+# mix.lock
+
+# 环境文件
+.env
+.env.*
+!.env.example
+
+# 编辑器 / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Operating system
+.DS_Store
+Thumbs.db
+
+# logs
+*.log
+
+# test coverage
+/cover/
+
+# Build products
+/_build/
+rel/example_project
+.consolidated/
+
+# Phoenix related
+# /priv/static/
+# /assets/node_modules/
+# /assets/elm-stuff/
+# /assets/bower_components/
+
+# database
+*.db
+*.sqlite
+*.sqlite3
