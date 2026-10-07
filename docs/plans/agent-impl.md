@@ -345,3 +345,18 @@ Resolve these decisions through small interfaces and tests rather than embedding
 ## 18. Definition of done for the first release
 
 The first release is ready when a clean checkout can start the OTP application, execute a complete scripted model run, load a selected Markdown skill, perform a validated tool call, emit a complete ordered event stream, stop on cancellation or limits, and return a normalized final result or error. It must also provide a basic interactive TUI where a user can submit prompts, see streamed output, invoke `/login`, `/help`, `/cancel`, `/skills`, `/clear`, and `/exit`, and leave the session cleanly. The default test suite must be offline, deterministic, and pass with formatting and documentation checks enabled.
+
+## 19. Current implementation status
+
+The first-release scope is implemented and covered by the offline test suite. The
+current implementation also includes bounded run snapshot retention, monitored
+event subscribers, TUI conversation history, ANSI-disabled rendering, a
+full-screen alternate-buffer TUI with editable input and transcript scrolling,
+secure filesystem traversal with symlink and cycle handling, configurable
+macOS OS-level shell isolation, supervised tool workers, approval and execution
+deadlines, and OpenAI-compatible complete and live network-level SSE responses.
+
+The following remain follow-up work: Linux-native sandbox backends and richer
+terminal integrations such as mouse support and syntax highlighting. Shell
+output is now collected incrementally with a hard byte limit. MCP and
+multi-agent execution remain outside this implementation scope.
