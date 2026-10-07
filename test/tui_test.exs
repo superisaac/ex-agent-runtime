@@ -1,10 +1,10 @@
-defmodule Littleagent.TUITest do
+defmodule Ear.TUITest do
   use ExUnit.Case
   import ExUnit.CaptureIO
 
   test "injected input loop can stop from the handler" do
     assert :ok =
-             Littleagent.TUI.Input.read_loop(
+             Ear.TUI.Input.read_loop(
                fn {:prompt, "exit"} -> :stop end,
                fn _prompt -> "exit\n" end
              )
@@ -15,7 +15,7 @@ defmodule Littleagent.TUITest do
     owner = self()
 
     assert :finished =
-             Littleagent.TUI.Input.read_loop(
+             Ear.TUI.Input.read_loop(
                fn
                  {:prompt, "first"} -> send(owner, :first_prompt)
                  {:prompt, "second"} -> {:stop, :finished}
@@ -32,9 +32,9 @@ defmodule Littleagent.TUITest do
   test "renderer prints assistant output only once" do
     output =
       capture_io(fn ->
-        Littleagent.TUI.Renderer.render(%{type: :message_delta, payload: %{text: "hello"}})
-        Littleagent.TUI.Renderer.render(%{type: :message_completed, payload: %{text: "hello"}})
-        Littleagent.TUI.Renderer.render(%{type: :run_completed, payload: %{text: "hello"}})
+        Ear.TUI.Renderer.render(%{type: :message_delta, payload: %{text: "hello"}})
+        Ear.TUI.Renderer.render(%{type: :message_completed, payload: %{text: "hello"}})
+        Ear.TUI.Renderer.render(%{type: :run_completed, payload: %{text: "hello"}})
       end)
 
     assert output == "hello\n"
@@ -43,24 +43,24 @@ defmodule Littleagent.TUITest do
   test "renderer reports skill lifecycle events" do
     output =
       capture_io(fn ->
-        Littleagent.TUI.Renderer.render(%{type: :skill_loaded, payload: %{name: "demo"}})
-        Littleagent.TUI.Renderer.render(%{type: :skill_error, payload: %{error: :invalid}})
+        Ear.TUI.Renderer.render(%{type: :skill_loaded, payload: %{name: "demo"}})
+        Ear.TUI.Renderer.render(%{type: :skill_error, payload: %{error: :invalid}})
       end)
 
     assert output == "[skill] demo loaded\n[skill] failed: :invalid\n"
   end
 
   test "renderer handles failed events without a reason" do
-    assert capture_io(fn -> Littleagent.TUI.Renderer.render(%{type: :run_failed}) end) ==
+    assert capture_io(fn -> Ear.TUI.Renderer.render(%{type: :run_failed}) end) ==
              "\nError: run failed\n"
   end
 
   test "renderer handles incomplete tool events" do
     output =
       capture_io(fn ->
-        Littleagent.TUI.Renderer.render(%{type: :tool_call_started})
-        Littleagent.TUI.Renderer.render(%{type: :tool_call_completed})
-        Littleagent.TUI.Renderer.render(%{type: :tool_call_failed})
+        Ear.TUI.Renderer.render(%{type: :tool_call_started})
+        Ear.TUI.Renderer.render(%{type: :tool_call_completed})
+        Ear.TUI.Renderer.render(%{type: :tool_call_failed})
       end)
 
     assert output == "\n[tool] started\n\n[tool] completed\n\n[tool] failed\n"
@@ -69,59 +69,59 @@ defmodule Littleagent.TUITest do
   test "renderer handles incomplete skill events" do
     output =
       capture_io(fn ->
-        Littleagent.TUI.Renderer.render(%{type: :skill_loaded})
-        Littleagent.TUI.Renderer.render(%{type: :skill_error})
+        Ear.TUI.Renderer.render(%{type: :skill_loaded})
+        Ear.TUI.Renderer.render(%{type: :skill_error})
       end)
 
     assert output == "[skill] loaded\n[skill] failed\n"
   end
 
   test "renderer reports run start" do
-    assert capture_io(fn -> Littleagent.TUI.Renderer.render(%{type: :run_started}) end) ==
+    assert capture_io(fn -> Ear.TUI.Renderer.render(%{type: :run_started}) end) ==
              "[run] started\n"
   end
 
   test "fullscreen editor supports grapheme insertion, navigation and submit" do
-    state = Littleagent.TUI.Fullscreen.new(ansi: false)
-    {state, :none} = Littleagent.TUI.Fullscreen.handle_key(state, "hel")
-    {state, :none} = Littleagent.TUI.Fullscreen.handle_key(state, :left)
-    {state, :none} = Littleagent.TUI.Fullscreen.handle_key(state, "X")
-    assert {state, {:submit, "heXl"}} = Littleagent.TUI.Fullscreen.handle_key(state, :enter)
+    state = Ear.TUI.Fullscreen.new(ansi: false)
+    {state, :none} = Ear.TUI.Fullscreen.handle_key(state, "hel")
+    {state, :none} = Ear.TUI.Fullscreen.handle_key(state, :left)
+    {state, :none} = Ear.TUI.Fullscreen.handle_key(state, "X")
+    assert {state, {:submit, "heXl"}} = Ear.TUI.Fullscreen.handle_key(state, :enter)
     assert state.input == ""
   end
 
   test "fullscreen key parser and frame include scrollable status" do
-    assert Littleagent.TUI.Fullscreen.parse_key("\e[A") == :up
-    assert Littleagent.TUI.Fullscreen.parse_key(<<3>>) == :ctrl_c
+    assert Ear.TUI.Fullscreen.parse_key("\e[A") == :up
+    assert Ear.TUI.Fullscreen.parse_key(<<3>>) == :ctrl_c
 
     state =
-      Littleagent.TUI.Fullscreen.new(ansi: false, height: 5)
-      |> Littleagent.TUI.Fullscreen.handle_event(%{
+      Ear.TUI.Fullscreen.new(ansi: false, height: 5)
+      |> Ear.TUI.Fullscreen.handle_event(%{
         type: :message_delta,
         payload: %{text: "hello"}
       })
-      |> Littleagent.TUI.Fullscreen.handle_event(%{type: :run_started})
+      |> Ear.TUI.Fullscreen.handle_event(%{type: :run_started})
 
-    frame = Littleagent.TUI.Fullscreen.render_frame(state)
+    frame = Ear.TUI.Fullscreen.render_frame(state)
     assert frame =~ "hello"
     assert frame =~ "[Running]"
     assert frame =~ "❯"
   end
 
   test "fullscreen decoder preserves partial escape sequences" do
-    assert {[], "\e["} = Littleagent.TUI.Fullscreen.decode_keys("\e[")
-    assert {[:up], ""} = Littleagent.TUI.Fullscreen.decode_keys("\e[A")
-    assert {[:delete], ""} = Littleagent.TUI.Fullscreen.decode_keys("\e[3~")
+    assert {[], "\e["} = Ear.TUI.Fullscreen.decode_keys("\e[")
+    assert {[:up], ""} = Ear.TUI.Fullscreen.decode_keys("\e[A")
+    assert {[:delete], ""} = Ear.TUI.Fullscreen.decode_keys("\e[3~")
   end
 
   test "fullscreen mode accepts injected keys and exits on EOF" do
     keys = Agent.start_link(fn -> ["h", "i", "\r", :eof] end) |> elem(1)
 
     assert :ok =
-             Littleagent.TUI.start(
+             Ear.TUI.start(
                fullscreen: true,
                ansi: false,
-               adapter: Littleagent.Model.Scripted.new([%{text: "ok"}]),
+               adapter: Ear.Model.Scripted.new([%{text: "ok"}]),
                key_input: fn ->
                  Agent.get_and_update(keys, fn
                    [head | tail] -> {head, tail}
@@ -138,7 +138,7 @@ defmodule Littleagent.TUITest do
 
     output =
       capture_io(fn ->
-        Littleagent.TUI.start(
+        Ear.TUI.start(
           ansi: false,
           input: fn _prompt ->
             case Agent.get_and_update(counter, fn
@@ -163,7 +163,7 @@ defmodule Littleagent.TUITest do
 
     output =
       capture_io(fn ->
-        Littleagent.TUI.start(
+        Ear.TUI.start(
           ansi: false,
           input: fn _prompt ->
             case Agent.get_and_update(counter, fn
@@ -193,8 +193,8 @@ defmodule Littleagent.TUITest do
 
       task =
         Task.async(fn ->
-          Littleagent.TUI.start(
-            adapter: Littleagent.Model.Scripted.new([%{text: "hello"}]),
+          Ear.TUI.start(
+            adapter: Ear.Model.Scripted.new([%{text: "hello"}]),
             renderer: fn event -> send(owner, {:rendered, self(), event}) end,
             input: fn _prompt ->
               send(owner, {:input_requested, self()})
@@ -225,8 +225,8 @@ defmodule Littleagent.TUITest do
 
     tui =
       spawn(fn ->
-        Littleagent.TUI.start(
-          adapter: Littleagent.Model.Scripted.new([%{text: "hello"}]),
+        Ear.TUI.start(
+          adapter: Ear.Model.Scripted.new([%{text: "hello"}]),
           renderer: fn event -> send(owner, {:rendered, self(), event}) end,
           input: fn _ ->
             receive do
@@ -249,8 +249,8 @@ defmodule Littleagent.TUITest do
 
     task =
       Task.async(fn ->
-        Littleagent.TUI.start(
-          adapter: %Littleagent.TestSupport.BlockingAdapter{owner: owner},
+        Ear.TUI.start(
+          adapter: %Ear.TestSupport.BlockingAdapter{owner: owner},
           input: fn _ -> Agent.get_and_update(inputs, fn [head | tail] -> {head, tail} end) end,
           renderer: fn _ -> :ok end
         )

@@ -1,4 +1,4 @@
-defmodule Littleagent.ExecutorTest.FailingTool do
+defmodule Ear.ExecutorTest.FailingTool do
   def name, do: "failing"
   def description, do: "Exercise tool failure handling."
   def validate(_), do: :ok
@@ -15,24 +15,24 @@ defmodule Littleagent.ExecutorTest.FailingTool do
   end
 end
 
-defmodule Littleagent.ExecutorTest do
+defmodule Ear.ExecutorTest do
   use ExUnit.Case, async: false
 
   test "converts exits and throws to errors" do
-    registry = %{"failing" => Littleagent.ExecutorTest.FailingTool}
+    registry = %{"failing" => Ear.ExecutorTest.FailingTool}
 
     assert {:error, {:exit, :boom}} =
-             Littleagent.Tools.Executor.execute(registry, "failing", %{"kind" => "exit"})
+             Ear.Tools.Executor.execute(registry, "failing", %{"kind" => "exit"})
 
     assert {:error, {:throw, :boom}} =
-             Littleagent.Tools.Executor.execute(registry, "failing", %{"kind" => "throw"})
+             Ear.Tools.Executor.execute(registry, "failing", %{"kind" => "throw"})
   end
 
   test "converts task exits from a worker" do
-    registry = %{"failing" => Littleagent.ExecutorTest.FailingTool}
+    registry = %{"failing" => Ear.ExecutorTest.FailingTool}
 
     assert {:error, {:exit, :boom}} =
-             Littleagent.Tools.Executor.execute_with_timeout(
+             Ear.Tools.Executor.execute_with_timeout(
                registry,
                "failing",
                %{"kind" => "exit"},
@@ -43,8 +43,8 @@ defmodule Littleagent.ExecutorTest do
 
   test "an untrappable worker exit does not kill its caller" do
     assert {:error, {:exit, :killed}} =
-             Littleagent.Tools.Executor.execute_with_timeout(
-               %{"failing" => Littleagent.ExecutorTest.FailingTool},
+             Ear.Tools.Executor.execute_with_timeout(
+               %{"failing" => Ear.ExecutorTest.FailingTool},
                "failing",
                %{"kind" => "kill"},
                %{},
@@ -56,8 +56,8 @@ defmodule Littleagent.ExecutorTest do
 
   test "a timed out worker is terminated" do
     assert {:error, :tool_timeout} =
-             Littleagent.Tools.Executor.execute_with_timeout(
-               %{"failing" => Littleagent.ExecutorTest.FailingTool},
+             Ear.Tools.Executor.execute_with_timeout(
+               %{"failing" => Ear.ExecutorTest.FailingTool},
                "failing",
                %{"kind" => "block"},
                %{owner: self()},
@@ -71,15 +71,15 @@ defmodule Littleagent.ExecutorTest do
 
   test "the agent continues after an untrappable tool exit" do
     adapter =
-      Littleagent.Model.Scripted.new([
+      Ear.Model.Scripted.new([
         %{tool_calls: [%{id: "killed-tool", name: "failing", args: %{"kind" => "kill"}}]},
         %{text: "recovered"}
       ])
 
     assert {:ok, %{text: "recovered"}, events} =
-             Littleagent.run_with_events("try the tool",
+             Ear.run_with_events("try the tool",
                adapter: adapter,
-               tool_modules: [Littleagent.ExecutorTest.FailingTool]
+               tool_modules: [Ear.ExecutorTest.FailingTool]
              )
 
     assert Enum.any?(events, fn event ->

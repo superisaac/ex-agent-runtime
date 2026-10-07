@@ -1,9 +1,9 @@
-defmodule Littleagent.MixProject do
+defmodule Ear.MixProject do
   use Mix.Project
 
   def project do
     [
-      app: :littleagent,
+      app: :ear,
       version: "0.1.0",
       elixir: "~> 1.20",
       start_permanent: Mix.env() == :prod,
@@ -15,7 +15,7 @@ defmodule Littleagent.MixProject do
   def application do
     [
       extra_applications: [:logger, :inets, :ssl],
-      mod: {Littleagent.Application, []}
+      mod: {Ear.Application, []}
     ]
   end
 

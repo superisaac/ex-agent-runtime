@@ -1,4 +1,4 @@
-defmodule Littleagent.TestSupport.BlockingAdapter do
+defmodule Ear.TestSupport.BlockingAdapter do
   defstruct [:owner]
 
   def complete(adapter, _request, _context) do
@@ -10,8 +10,8 @@ defmodule Littleagent.TestSupport.BlockingAdapter do
   end
 end
 
-defmodule Littleagent.TestSupport.HangingTool do
-  @behaviour Littleagent.Tools.Tool
+defmodule Ear.TestSupport.HangingTool do
+  @behaviour Ear.Tools.Tool
   def name, do: "hang"
   def description, do: "Hang forever"
   def validate(_), do: :ok

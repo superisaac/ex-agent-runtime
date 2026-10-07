@@ -1,3 +1,5 @@
-littleagent 使用elixir语言实现pi agent 的基本功能，有agent loop, 能发出event, 支持加载skills. 暂时不支持MCP和multi agent。
+EAR (Elixir Agent Runtime) implements the basic functionality of a Pi-style
+agent in Elixir. It provides an agent loop, structured events, and skill
+loading. MCP and multi-agent execution are currently out of scope.
 
-先写详细计划，不实现。计划写在docs/plans/agent-impl.md
+The implementation plan is maintained in `docs/plans/agent-impl.md`.

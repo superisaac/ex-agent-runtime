@@ -1,5 +1,5 @@
-defmodule Littleagent.AdapterTest.CompleteOnly do
-  @behaviour Littleagent.Model.Adapter
+defmodule Ear.AdapterTest.CompleteOnly do
+  @behaviour Ear.Model.Adapter
   defstruct text: "fallback"
 
   @impl true
@@ -9,7 +9,7 @@ defmodule Littleagent.AdapterTest.CompleteOnly do
   end
 end
 
-defmodule Littleagent.AdapterTest.ContextAdapter do
+defmodule Ear.AdapterTest.ContextAdapter do
   defstruct [:owner]
 
   def complete(%__MODULE__{owner: owner}, _request, context) do
@@ -18,15 +18,15 @@ defmodule Littleagent.AdapterTest.ContextAdapter do
   end
 end
 
-defmodule Littleagent.AdapterTest.LegacyModule do
+defmodule Ear.AdapterTest.LegacyModule do
   def complete(_request, _context), do: {:ok, %{text: "legacy"}}
 end
 
-defmodule Littleagent.AdapterTest.LegacyContext do
+defmodule Ear.AdapterTest.LegacyContext do
   def complete(_request, context), do: {:ok, %{text: context[:workspace] || "missing"}}
 end
 
-defmodule Littleagent.AdapterTest.LiveStream do
+defmodule Ear.AdapterTest.LiveStream do
   def complete(_adapter, _request, _context), do: {:ok, %{text: "fallback"}}
 
   def stream(_adapter, _request, context) do
@@ -42,13 +42,13 @@ defmodule Littleagent.AdapterTest.LiveStream do
   end
 end
 
-defmodule Littleagent.AdapterTest do
+defmodule Ear.AdapterTest do
   use ExUnit.Case, async: false
-  alias Littleagent.AdapterTest.CompleteOnly
+  alias Ear.AdapterTest.CompleteOnly
 
   test "struct adapters fall back to complete when streaming is unavailable" do
     assert {:ok, %{text: "fallback"}, events} =
-             Littleagent.run_with_events("hello", adapter: %CompleteOnly{}, stream: true)
+             Ear.run_with_events("hello", adapter: %CompleteOnly{}, stream: true)
 
     assert Enum.map(events, & &1.type) == [
              :run_started,
@@ -60,14 +60,14 @@ defmodule Littleagent.AdapterTest do
 
   test "module adapters fall back to complete when streaming is unavailable" do
     assert {:ok, %{text: "module fallback"}} =
-             Littleagent.run("hello", adapter: CompleteOnly, stream: true)
+             Ear.run("hello", adapter: CompleteOnly, stream: true)
   end
 
   test "model adapters receive run context" do
-    adapter = %Littleagent.AdapterTest.ContextAdapter{owner: self()}
+    adapter = %Ear.AdapterTest.ContextAdapter{owner: self()}
 
     assert {:ok, %{text: "context"}} =
-             Littleagent.run("hello",
+             Ear.run("hello",
                adapter: adapter,
                workspace: "/tmp",
                tool_context: %{trace: "yes"}
@@ -81,21 +81,21 @@ defmodule Littleagent.AdapterTest do
 
   test "legacy module complete/2 adapters remain supported" do
     assert {:ok, %{text: "legacy"}} =
-             Littleagent.run("hello", adapter: Littleagent.AdapterTest.LegacyModule)
+             Ear.run("hello", adapter: Ear.AdapterTest.LegacyModule)
   end
 
   test "legacy module adapters receive the run context" do
     assert {:ok, %{text: "/tmp"}} =
-             Littleagent.run("hello",
-               adapter: Littleagent.AdapterTest.LegacyContext,
+             Ear.run("hello",
+               adapter: Ear.AdapterTest.LegacyContext,
                workspace: "/tmp"
              )
   end
 
   test "live adapter chunks reach subscribers before completion" do
     {:ok, run_id, _pid} =
-      Littleagent.start_run("hello",
-        adapter: Littleagent.AdapterTest.LiveStream,
+      Ear.start_run("hello",
+        adapter: Ear.AdapterTest.LiveStream,
         stream: true,
         tool_context: %{test_pid: self()},
         subscriber: self()
@@ -103,11 +103,10 @@ defmodule Littleagent.AdapterTest do
 
     assert_receive {:stream_started, _token}, 1_000
 
-    assert_receive {:littleagent,
-                    %{run_id: ^run_id, type: :message_delta, payload: %{text: "live"}}},
+    assert_receive {:ear, %{run_id: ^run_id, type: :message_delta, payload: %{text: "live"}}},
                    1_000
 
-    assert_receive {:littleagent, %{run_id: ^run_id, type: :message_completed}}, 1_000
-    assert_receive {:littleagent, %{run_id: ^run_id, type: :run_completed}}, 1_000
+    assert_receive {:ear, %{run_id: ^run_id, type: :message_completed}}, 1_000
+    assert_receive {:ear, %{run_id: ^run_id, type: :run_completed}}, 1_000
   end
 end

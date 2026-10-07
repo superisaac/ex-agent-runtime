@@ -1,8 +1,8 @@
-# Littleagent Implementation Plan
+# EAR (Elixir Agent Runtime) Implementation Plan
 
 ## 1. Objective
 
-Build the first usable version of `littleagent` in Elixir. The agent should provide the basic behavior expected from a Pi-style coding agent:
+Build the first usable version of `ear` in Elixir. The agent should provide the basic behavior expected from a Pi-style coding agent:
 
 - accept a user prompt and maintain a conversation;
 - run a model/tool agent loop until the model produces a final answer or the run stops;
@@ -54,34 +54,34 @@ Create a standard Mix project and keep public boundaries apparent in the directo
 
 ```text
 lib/
-  littleagent.ex                 # Public facade
-  littleagent/application.ex     # OTP supervision tree
-  littleagent/agent/
+  ear.ex                 # Public facade
+  ear/application.ex     # OTP supervision tree
+  ear/agent/
     loop.ex                      # Run state machine
     state.ex                     # Immutable run state
     config.ex                    # Validated run options
-  littleagent/conversation/
+  ear/conversation/
     message.ex                   # Message structs and validation
     transcript.ex                # Append/query transcript
-  littleagent/model/
+  ear/model/
     adapter.ex                   # Behaviour for model providers
     request.ex
     response.ex
-  littleagent/tools/
+  ear/tools/
     tool.ex                      # Tool behaviour and metadata
     registry.ex
     executor.ex
-  littleagent/skills/
+  ear/skills/
     skill.ex                     # Skill metadata and content
     loader.ex
     registry.ex
     prompt.ex
-  littleagent/events/
+  ear/events/
     event.ex                     # Event structs/types
     publisher.ex                  # PubSub or subscriber delivery
-  littleagent/errors.ex           # Normalized error types
-  littleagent/runtime.ex          # Run lifecycle and cancellation
-  littleagent/tui/
+  ear/errors.ex           # Normalized error types
+  ear/runtime.ex          # Run lifecycle and cancellation
+  ear/tui/
     application.ex                # Interactive TUI entry point
     renderer.ex                   # Event-to-terminal rendering
     input.ex                      # Line input and command parsing
@@ -101,11 +101,11 @@ The exact file split can be adjusted while implementing, but the contracts betwe
 The facade should expose a small API before any provider-specific details:
 
 ```elixir
-Littleagent.start_run(prompt, opts) :: {:ok, run_id} | {:error, reason}
-Littleagent.run(prompt, opts) :: {:ok, result} | {:error, reason}
-Littleagent.subscribe(run_id, subscriber) :: :ok | {:error, reason}
-Littleagent.cancel(run_id) :: :ok | {:error, :not_found}
-Littleagent.get_run(run_id) :: {:ok, snapshot} | {:error, :not_found}
+Ear.start_run(prompt, opts) :: {:ok, run_id} | {:error, reason}
+Ear.run(prompt, opts) :: {:ok, result} | {:error, reason}
+Ear.subscribe(run_id, subscriber) :: :ok | {:error, reason}
+Ear.cancel(run_id) :: :ok | {:error, :not_found}
+Ear.get_run(run_id) :: {:ok, snapshot} | {:error, :not_found}
 ```
 
 `start_run/2` should return promptly and execute under a supervised run process. `run/2` may be a synchronous convenience wrapper that collects terminal events. A run has a unique ID, a monotonic event sequence, a status (`:pending`, `:running`, `:completed`, `:failed`, or `:cancelled`), a transcript, counters, and timestamps.
@@ -143,7 +143,7 @@ Command results should be represented as TUI-local messages or dedicated UI even
 
 ### Session state and shutdown
 
-`Littleagent.TUI.Session` should track the current run ID, displayed transcript, command registry, authentication status, selected skills, renderer mode, and shutdown flag. It subscribes to run events and maps them to rendering actions. Terminal shutdown is successful only after the run process receives cancellation and emits a terminal event, or after a bounded shutdown timeout with a diagnostic message.
+`Ear.TUI.Session` should track the current run ID, displayed transcript, command registry, authentication status, selected skills, renderer mode, and shutdown flag. It subscribes to run events and maps them to rendering actions. Terminal shutdown is successful only after the run process receives cancellation and emits a terminal event, or after a bounded shutdown timeout with a diagnostic message.
 
 Authentication state belongs behind an `Auth` behaviour or adapter. Store credentials through an explicitly selected local mechanism and keep the TUI independent of provider-specific login details. `/login` should be testable with a fake adapter and should report success, cancellation, and failure as safe user-facing messages.
 

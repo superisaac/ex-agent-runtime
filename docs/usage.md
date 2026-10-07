@@ -1,4 +1,4 @@
-# Littleagent Usage
+# EAR (Elixir Agent Runtime) Usage
 
 ## Interactive TUI
 
@@ -6,7 +6,7 @@ Start the terminal UI with:
 
 ```sh
 mix compile
-mix littleagent
+mix ear
 ```
 
 The Mix task accepts `--endpoint URL`, `--model NAME`, repeated
@@ -16,8 +16,8 @@ Set `OPENAI_API_KEY` before starting to use the OpenAI-compatible adapter. The
 following environment variables are supported:
 
 - `OPENAI_API_KEY`: provider credential;
-- `LITTLEAGENT_OPENAI_ENDPOINT`: compatible chat-completions endpoint;
-- `LITTLEAGENT_MODEL`: model name.
+- `EAR_OPENAI_ENDPOINT`: compatible chat-completions endpoint;
+- `EAR_MODEL`: model name.
 
 The TUI supports `/help`, `/login`, `/skills`, `/reload-skills`, `/status`, `/history`, `/runs`,
 `/clear-runs`, `/cancel`, `/clear`, `/exit`, and `/quit`. `/runs` accepts an
@@ -29,7 +29,7 @@ another run is active. Assistant text is rendered incrementally from
 completes. `/login openai` validates `OPENAI_API_KEY` and configures the
 OpenAI adapter for subsequent prompts. Completed runs remain the session
 context, so the next prompt includes earlier user, assistant, and tool
-messages. Set `ansi: false` in `Littleagent.TUI.start/1` when output is being
+messages. Set `ansi: false` in `Ear.TUI.start/1` when output is being
 redirected or the terminal does not support ANSI control sequences.
 The default renderer also reports run start, skill loading, and tool lifecycle
 events as compact status lines.
@@ -51,7 +51,7 @@ the next prompt.
 On `/exit` or EOF, the TUI requests cancellation and waits briefly for the
 active run to reach a terminal state before shutting down its event renderer.
 
-Use `Littleagent.TUI.start(fullscreen: true)` for the full-screen terminal
+Use `Ear.TUI.start(fullscreen: true)` for the full-screen terminal
 mode. It provides an alternate screen buffer, editable input with arrow keys,
 Backspace, Delete, and Enter, plus Up/Down and PageUp/PageDown transcript
 scrolling. `Ctrl-L` redraws the screen. `Ctrl-C` cancels the active run or
@@ -67,23 +67,23 @@ errors to the TUI.
 Use a scripted adapter for deterministic local development:
 
 ```elixir
-adapter = Littleagent.Model.Scripted.new([%{text: "Hello"}])
-Littleagent.run("Say hello", adapter: adapter)
+adapter = Ear.Model.Scripted.new([%{text: "Hello"}])
+Ear.run("Say hello", adapter: adapter)
 ```
 
 When no adapter is supplied, the run API uses the OpenAI-compatible adapter
-and reads `OPENAI_API_KEY`, `LITTLEAGENT_OPENAI_ENDPOINT`, and
-`LITTLEAGENT_MODEL` from the environment. Without a key it returns
+and reads `OPENAI_API_KEY`, `EAR_OPENAI_ENDPOINT`, and
+`EAR_MODEL` from the environment. Without a key it returns
 `{:error, %{reason: :missing_api_key}}`.
 
 Use the OpenAI-compatible adapter for a live provider:
 
 ```elixir
-adapter = Littleagent.Model.OpenAI.new()
-Littleagent.run("Explain this project", adapter: adapter, stream: true)
+adapter = Ear.Model.OpenAI.new()
+Ear.run("Explain this project", adapter: adapter, stream: true)
 ```
 
-Custom struct adapters implement `Littleagent.Model.Adapter.complete/3`;
+Custom struct adapters implement `Ear.Model.Adapter.complete/3`;
 module adapters may implement `complete/3` or the legacy `complete/2` form.
 The `stream/3` callback is optional: when `stream: true` is requested for an
 adapter without that callback, the loop calls `complete/3` instead. This
@@ -95,7 +95,7 @@ Use `run_with_events/2` when the caller needs the complete ordered event
 stream:
 
 ```elixir
-{:ok, result, events} = Littleagent.run_with_events("Inspect the project", adapter: adapter)
+{:ok, result, events} = Ear.run_with_events("Inspect the project", adapter: adapter)
 ```
 
 Successful assistant text emits one or more `message_delta` events followed
@@ -115,9 +115,9 @@ to bound the synchronous wait; it covers the whole collection period and cancels
 the active run when it expires. Events belonging to other runs remain in the
 caller's mailbox.
 
-`Littleagent.list_runs/0` returns all stored snapshots. Use
-`Littleagent.list_runs(limit)` to cap the number of returned records.
-Active runs support `Littleagent.subscribe/2` and `Littleagent.unsubscribe/2`
+`Ear.list_runs/0` returns all stored snapshots. Use
+`Ear.list_runs(limit)` to cap the number of returned records.
+Active runs support `Ear.subscribe/2` and `Ear.unsubscribe/2`
 for managing event consumers. Subscriber processes are monitored and removed
 automatically when they exit.
 Run snapshots are kept in a supervised in-memory store with a default limit of
@@ -127,9 +127,9 @@ to change the retention limit.
 Runs accept safety and resource limits:
 
 ```elixir
-Littleagent.run("Use the echo tool", 
+Ear.run("Use the echo tool",
   adapter: adapter,
-  tools: Littleagent.Tools.Registry.new([Littleagent.Tools.Echo]),
+  tools: Ear.Tools.Registry.new([Ear.Tools.Echo]),
   allowed_tools: ["echo"],
   max_turns: 8,
   max_tool_calls: 16,
@@ -152,7 +152,7 @@ response execute sequentially, preserving transcript order.
 Skill roots can be supplied to inject local `SKILL.md` instructions:
 
 ```elixir
-Littleagent.TUI.start(skill_roots: ["./priv/skills"])
+Ear.TUI.start(skill_roots: ["./priv/skills"])
 ```
 
 Built-in tools are opt-in and include `file_read`, `file_write`, `file_list`,
@@ -166,9 +166,9 @@ should also use `allowed_tools` and an approval callback:
 bytes to detect oversized content. The default limit is 256,000 bytes.
 
 ```elixir
-tools = Littleagent.Tools.Registry.new([Littleagent.Tools.FileRead, Littleagent.Tools.Shell])
+tools = Ear.Tools.Registry.new([Ear.Tools.FileRead, Ear.Tools.Shell])
 
-Littleagent.run("Inspect the project", 
+Ear.run("Inspect the project",
   adapter: adapter,
   tools: tools,
   workspace: "/path/to/project",

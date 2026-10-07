@@ -1,9 +1,9 @@
-defmodule Littleagent.FileReadTest do
+defmodule Ear.FileReadTest do
   use ExUnit.Case, async: true
-  alias Littleagent.Tools.FileRead
+  alias Ear.Tools.FileRead
 
   setup do
-    root = Path.join(System.tmp_dir!(), "littleagent-read-#{System.unique_integer([:positive])}")
+    root = Path.join(System.tmp_dir!(), "ear-read-#{System.unique_integer([:positive])}")
     File.mkdir_p!(root)
     on_exit(fn -> File.rm_rf!(root) end)
     %{root: root}

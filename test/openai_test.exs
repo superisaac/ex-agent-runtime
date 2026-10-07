@@ -1,23 +1,23 @@
-defmodule Littleagent.OpenAITest do
+defmodule Ear.OpenAITest do
   use ExUnit.Case, async: true
 
   test "normalizes invalid HTTP timeout configuration" do
-    assert Littleagent.Model.OpenAI.new(timeout: -1).timeout == 30_000
-    assert Littleagent.Model.OpenAI.new(timeout: "fast").timeout == 30_000
-    assert Littleagent.Model.OpenAI.new(timeout: 0).timeout == 0
+    assert Ear.Model.OpenAI.new(timeout: -1).timeout == 30_000
+    assert Ear.Model.OpenAI.new(timeout: "fast").timeout == 30_000
+    assert Ear.Model.OpenAI.new(timeout: 0).timeout == 0
   end
 
   test "normalizes empty endpoint and model configuration" do
-    adapter = Littleagent.Model.OpenAI.new(endpoint: "", model: " gpt-test ")
+    adapter = Ear.Model.OpenAI.new(endpoint: "", model: " gpt-test ")
     assert adapter.endpoint == "https://api.openai.com/v1/chat/completions"
     assert adapter.model == "gpt-test"
   end
 
   test "normalizes malformed endpoints" do
-    assert Littleagent.Model.OpenAI.new(endpoint: "localhost:4000").endpoint ==
+    assert Ear.Model.OpenAI.new(endpoint: "localhost:4000").endpoint ==
              "https://api.openai.com/v1/chat/completions"
 
-    assert Littleagent.Model.OpenAI.new(endpoint: "ftp://example.com").endpoint ==
+    assert Ear.Model.OpenAI.new(endpoint: "ftp://example.com").endpoint ==
              "https://api.openai.com/v1/chat/completions"
   end
 
@@ -48,13 +48,13 @@ defmodule Littleagent.OpenAITest do
       end)
 
     adapter =
-      Littleagent.Model.OpenAI.new(
+      Ear.Model.OpenAI.new(
         api_key: "test",
         endpoint: "http://127.0.0.1:#{port}/v1/chat/completions"
       )
 
     assert {:ok, %{text: "hello"}} =
-             Littleagent.Model.OpenAI.complete(adapter, %{messages: [], prompt: "hello"}, %{})
+             Ear.Model.OpenAI.complete(adapter, %{messages: [], prompt: "hello"}, %{})
 
     assert_receive {:request_body,
                     %{
@@ -68,9 +68,9 @@ defmodule Littleagent.OpenAITest do
   end
 
   test "treats blank API keys as missing" do
-    adapter = Littleagent.Model.OpenAI.new(api_key: "  ")
+    adapter = Ear.Model.OpenAI.new(api_key: "  ")
     assert adapter.api_key == nil
-    assert {:error, :missing_api_key} = Littleagent.Model.OpenAI.complete(adapter, %{}, %{})
+    assert {:error, :missing_api_key} = Ear.Model.OpenAI.complete(adapter, %{}, %{})
   end
 
   test "tool continuation sends system instructions and JSON string arguments" do
@@ -101,7 +101,7 @@ defmodule Littleagent.OpenAITest do
         :gen_tcp.close(socket)
       end)
 
-    alias Littleagent.Conversation.Message
+    alias Ear.Conversation.Message
 
     request = %{
       system_prompt: "Keep the skill instructions.",
@@ -119,12 +119,12 @@ defmodule Littleagent.OpenAITest do
     }
 
     adapter =
-      Littleagent.Model.OpenAI.new(
+      Ear.Model.OpenAI.new(
         api_key: "test",
         endpoint: "http://127.0.0.1:#{port}/v1/chat/completions"
       )
 
-    assert {:ok, %{text: "done"}} = Littleagent.Model.OpenAI.complete(adapter, request, %{})
+    assert {:ok, %{text: "done"}} = Ear.Model.OpenAI.complete(adapter, request, %{})
     assert_receive {:request_body, payload}
     [system, user, assistant, tool] = payload["messages"]
     assert system == %{"role" => "system", "content" => request.system_prompt}
@@ -168,14 +168,14 @@ defmodule Littleagent.OpenAITest do
       end)
 
     adapter =
-      Littleagent.Model.OpenAI.new(
+      Ear.Model.OpenAI.new(
         api_key: "test",
         endpoint: "http://127.0.0.1:#{port}/v1/chat/completions"
       )
 
     request = %{messages: [%{"role" => "user", "content" => "hello"}]}
 
-    assert {:ok, %{text: "ok"}} = Littleagent.Model.OpenAI.complete(adapter, request, %{})
+    assert {:ok, %{text: "ok"}} = Ear.Model.OpenAI.complete(adapter, request, %{})
 
     assert_receive {:request_body,
                     %{
@@ -213,13 +213,13 @@ defmodule Littleagent.OpenAITest do
       end)
 
     adapter =
-      Littleagent.Model.OpenAI.new(
+      Ear.Model.OpenAI.new(
         api_key: "test",
         endpoint: "http://127.0.0.1:#{port}/v1/chat/completions"
       )
 
     assert {:ok, %{chunks: chunks}} =
-             Littleagent.Model.OpenAI.stream(adapter, %{prompt: "hi"}, %{})
+             Ear.Model.OpenAI.stream(adapter, %{prompt: "hi"}, %{})
 
     assert %{type: :text_delta, text: "hi"} in chunks
     assert %{type: :tool_call_delta, index: 0, id: "c1", name: "echo", arguments: "{}"} in chunks
@@ -261,14 +261,14 @@ defmodule Littleagent.OpenAITest do
       end)
 
     adapter =
-      Littleagent.Model.OpenAI.new(
+      Ear.Model.OpenAI.new(
         api_key: "test",
         endpoint: "http://127.0.0.1:#{port}/v1/chat/completions"
       )
 
     task =
       Task.async(fn ->
-        Littleagent.Model.OpenAI.stream(adapter, %{prompt: "hi"},
+        Ear.Model.OpenAI.stream(adapter, %{prompt: "hi"},
           stream_owner: owner,
           stream_token: token
         )
@@ -300,7 +300,7 @@ defmodule Littleagent.OpenAITest do
   end
 end
 
-defmodule Littleagent.OpenAITest.CompleteOnlyAdapter do
-  @behaviour Littleagent.Model.Adapter
+defmodule Ear.OpenAITest.CompleteOnlyAdapter do
+  @behaviour Ear.Model.Adapter
   def complete(_adapter, _request, _context), do: {:ok, %{text: "ok"}}
 end
