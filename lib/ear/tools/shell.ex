@@ -66,7 +66,12 @@ defmodule Ear.Tools.Shell do
 
   def isolation_available?(:none), do: true
 
-  def isolation_available?(mode) when mode in [:workspace, :strict], do: sandbox_exec_available?()
+  def isolation_available?(mode) when mode in [:workspace, :strict] do
+    case :os.type() do
+      {:unix, :linux} -> Ear.Tools.Bubblewrap.available?()
+      _ -> sandbox_exec_available?()
+    end
+  end
 
   def isolation_available?(_), do: false
 
@@ -75,6 +80,31 @@ defmodule Ear.Tools.Shell do
 
   defp launch_command(executable, shell, command, environment, workspace, isolation, context)
        when isolation in [:workspace, :strict] do
+    case :os.type() do
+      {:unix, :linux} ->
+        launch_linux(executable, shell, command, environment, workspace, isolation, context)
+
+      _ ->
+        launch_macos(executable, shell, command, environment, workspace, isolation, context)
+    end
+  end
+
+  defp launch_linux(executable, shell, command, environment, workspace, isolation, context) do
+    if Ear.Tools.Bubblewrap.available?() do
+      args = [executable, "-i" | environment_args(environment)] ++ [shell, "-c", command]
+
+      {:ok, System.find_executable("bwrap"),
+       Ear.Tools.Bubblewrap.arguments(workspace, args, Map.get(context, :shell_network, false))}
+    else
+      if isolation == :strict do
+        {:error, {:isolation_unavailable, :bubblewrap}}
+      else
+        launch_command(executable, shell, command, environment, workspace, :none, context)
+      end
+    end
+  end
+
+  defp launch_macos(executable, shell, command, environment, workspace, isolation, context) do
     case {System.find_executable("sandbox-exec"), sandbox_exec_available?()} do
       {_sandbox, false} when isolation == :strict ->
         {:error, {:isolation_unavailable, :sandbox_exec}}

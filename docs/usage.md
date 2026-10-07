@@ -1,5 +1,30 @@
 # EAR (Elixir Agent Runtime) Usage
 
+## Partial Results and Model Failures
+
+Live model chunks reach subscribers while the model request is still running.
+On cancellation, provider failure, worker crash, deadline expiration, or an
+output-limit failure, accepted chunks are retained in the stored transcript as
+an assistant message with `metadata.partial: true`. A `message_completed` event
+with `partial: true` closes that message before the single terminal event.
+
+The terminal payload includes `partial_result` with `text`, `message_id`, and
+`tool_call_deltas`. Incomplete tool fragments are retained as metadata and never
+executed. An oversized incoming batch is rejected without emitting it; earlier
+accepted chunks are still preserved. Normal successful completion does not add
+partial metadata or duplicate the assistant message.
+
+Malformed response bodies, live chunks, and tool-call structures produce
+`run_failed` with reason `:malformed_model_response`. A valid explicit empty
+text response remains a successful completion. Invalid adapter return tuples
+use `:malformed_adapter_response`.
+
+`run_with_events/2` returns terminal payloads together with the collected events.
+Its own caller timeout returns immediately with `:timeout` and requests
+cancellation; the eventual cancellation event and stored snapshot contain any
+partial result. Use `subscribe/2` or the original subscriber to observe that
+terminal event, and `get_run/1` to retrieve the snapshot after termination.
+
 ## Interactive TUI
 
 Start the terminal UI with:
@@ -8,6 +33,76 @@ Start the terminal UI with:
 mix compile
 mix ear
 ```
+
+### User Configuration
+
+Both TUI modes check `~/.ear/agent/models.yaml` and
+`~/.ear/agent/settings.yaml` before starting terminal input. Missing directories
+and files are created; existing files are never overwritten. YAML comments and
+normal lists are supported. Invalid configuration stops startup with a file name
+and safe error reason, without printing file contents.
+
+`models.yaml` groups models by provider, using a Pi-style provider/model registry:
+
+```yaml
+providers:
+  openai:
+    baseUrl: https://api.openai.com/v1
+    api: openai-completions
+    apiEnvKey: OPENAI_API_KEY
+    models:
+      - id: gpt-4o-mini
+        name: GPT-4o Mini
+```
+
+Multiple providers and model IDs are supported. Currently the supported protocol
+is `openai-completions` (OpenAI-compatible chat completions). `baseUrl` may also
+be a complete `/chat/completions` endpoint. Credentials are read only from the
+environment variable named by `apiEnvKey`; inline `apiKey`/`api_key` fields are
+rejected. A missing or blank credential produces `missing_api_key` when a run
+starts, allowing the TUI to open without credentials.
+
+`settings.yaml` selects the default provider/model and terminal preferences:
+
+```yaml
+defaultProvider: openai
+defaultModel: gpt-4o-mini
+stream: true
+ansi: true
+fullscreen: false
+skillRoots: []
+# Optional non-negative run limits:
+# maxTurns: 8
+# maxToolCalls: 16
+# maxOutputChars: 100000
+# maxElapsedMs: 60000
+# toolTimeoutMs: 30000
+```
+
+On first creation, the following environment variables supply defaults. Credential
+values are never written to either file.
+
+| Configuration | Environment variables, in precedence order |
+| --- | --- |
+| Provider name | `EAR_PROVIDER`, otherwise `openai` |
+| Model ID | `EAR_MODEL`, `OPENAI_MODEL`, otherwise `gpt-4o-mini` |
+| Base URL or endpoint | `EAR_OPENAI_ENDPOINT`, `OPENAI_BASE_URL`, otherwise the OpenAI `/v1` base URL |
+| Credential variable name | `EAR_API_ENV_KEY`, otherwise `OPENAI_API_KEY` |
+| Terminal preferences | `EAR_STREAM`, `EAR_ANSI`, `EAR_FULLSCREEN` (`true`/`false` or `1`/`0`) |
+| Optional run limits | `EAR_MAX_TURNS`, `EAR_MAX_TOOL_CALLS`, `EAR_MAX_OUTPUT_CHARS`, `EAR_MAX_ELAPSED_MS`, `EAR_TOOL_TIMEOUT_MS` |
+
+Blank values use defaults, and invalid optional preference/limit values are
+ignored. If only settings are missing, their default provider/model is chosen
+from the existing model registry. Explicit TUI options and CLI `--model` /
+`--endpoint` override stored configuration; environment model preferences seed
+missing files and do not override an existing configuration. An explicit model
+override may name a model not yet listed in the registry.
+
+`/login` without an argument validates the selected provider's `apiEnvKey` and
+refreshes its credential while keeping the configured model and endpoint.
+Applications/tests can use `config_dir: path` for a separate configuration
+directory, or explicitly disable file initialization with `config: false`.
+The non-TUI run API continues to accept injected adapters and environment defaults.
 
 The Mix task accepts `--endpoint URL`, `--model NAME`, repeated
 `--skill-root PATH`, `--no-ansi`, and `--fullscreen` in addition to `--help`.
@@ -27,7 +122,8 @@ skill name to filter the list. A prompt is rejected while
 another run is active. Assistant text is rendered incrementally from
 `message_delta` events and terminated with a single newline when the run
 completes. `/login openai` validates `OPENAI_API_KEY` and configures the
-OpenAI adapter for subsequent prompts. Completed runs remain the session
+OpenAI adapter for subsequent prompts. Use `/login` for the configured default
+provider. Completed runs remain the session
 context, so the next prompt includes earlier user, assistant, and tool
 messages. Set `ansi: false` in `Ear.TUI.start/1` when output is being
 redirected or the terminal does not support ANSI control sequences.
@@ -43,6 +139,15 @@ directories, and denies network access by default. Use
 `:none` preserves the legacy workspace-only behavior. If the sandbox backend is
 unavailable, `:workspace` falls back to the legacy launcher; use `:strict` to
 reject that fallback.
+
+On Linux, isolation uses `bubblewrap` (`bwrap`), which must be installed with
+unprivileged user namespaces enabled. Runtime files are mounted read-only;
+only the workspace is writable on the host. Temporary files use a private
+`/tmp`, and process and network namespaces are isolated. `shell_network: true`
+shares the host network namespace and mounts DNS configuration. A sandbox
+startup probe detects hosts that prohibit namespace creation. Linux isolation
+integration tests run only when that probe succeeds.
+
 Command names are case-insensitive, so `/HELP` and `/help` are equivalent.
 `/cancel` keeps the cancelled run associated with the session until its
 terminal state is stored, preventing a new prompt from racing cancellation.

@@ -2,10 +2,12 @@ defmodule Ear.TUI do
   alias Ear.TUI.{Command, Session}
 
   def start(opts \\ []) do
-    if Keyword.get(opts, :fullscreen, false) do
-      Ear.TUI.Fullscreen.start(opts)
-    else
-      start_line_oriented(opts)
+    with {:ok, opts} <- Ear.Config.User.prepare_tui(opts) do
+      if Keyword.get(opts, :fullscreen, false) do
+        Ear.TUI.Fullscreen.start(Keyword.put(opts, :config, false))
+      else
+        start_line_oriented(opts)
+      end
     end
   end
 

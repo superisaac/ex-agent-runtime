@@ -53,13 +53,28 @@ defmodule Ear.TUI.Session do
   end
 
   def handle(%__MODULE__{} = session, {:command, "login", args}) do
-    provider = if args == "", do: "default", else: args
+    provider = if args == "", do: Keyword.get(session.run_opts, :provider, "default"), else: args
+    configured_provider = Keyword.get(session.run_opts, :provider)
+    configured? = provider == "default" or provider == configured_provider
+    auth_opts = if configured?, do: %{api_env_key: session.run_opts[:api_env_key]}, else: %{}
 
-    case safe_authenticate(session.auth_adapter, provider) do
+    case safe_authenticate(session.auth_adapter, provider, auth_opts) do
       {:ok, auth} ->
         run_opts =
-          if String.downcase(provider) in ["default", "openai"] do
-            Keyword.put(session.run_opts, :adapter, Ear.Model.OpenAI.new())
+          if configured? or String.downcase(provider) == "openai" do
+            adapter =
+              case session.run_opts[:adapter] do
+                %Ear.Model.OpenAI{} = adapter when configured? ->
+                  %{
+                    adapter
+                    | api_key: System.get_env(session.run_opts[:api_env_key] || "OPENAI_API_KEY")
+                  }
+
+                _ ->
+                  Ear.Model.OpenAI.new()
+              end
+
+            Keyword.put(session.run_opts, :adapter, adapter)
           else
             session.run_opts
           end
@@ -140,12 +155,16 @@ defmodule Ear.TUI.Session do
   def handle(session, _), do: {session, {:error, :invalid_input}}
   def render_event(event), do: Renderer.render(event)
 
-  defp authenticate(adapter, provider) when is_atom(adapter), do: adapter.login(provider, %{})
-  defp authenticate(adapter, provider) when is_function(adapter, 2), do: adapter.(provider, %{})
-  defp authenticate(_adapter, _provider), do: {:error, :invalid_auth_adapter}
+  defp authenticate(adapter, provider, opts) when is_atom(adapter),
+    do: adapter.login(provider, opts)
 
-  defp safe_authenticate(adapter, provider) do
-    authenticate(adapter, provider)
+  defp authenticate(adapter, provider, opts) when is_function(adapter, 2),
+    do: adapter.(provider, opts)
+
+  defp authenticate(_adapter, _provider, _opts), do: {:error, :invalid_auth_adapter}
+
+  defp safe_authenticate(adapter, provider, opts) do
+    authenticate(adapter, provider, opts)
   rescue
     exception -> {:error, {:auth_exception, exception}}
   catch

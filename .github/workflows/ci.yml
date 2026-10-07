@@ -9,9 +9,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Linux shell sandbox
+        run: sudo apt-get update && sudo apt-get install -y bubblewrap
       - uses: erlef/setup-beam@v1
         with:
           elixir-version: '1.20.x'
           otp-version: '27.x'
+      - run: mix deps.get
       - run: mix format --check-formatted
       - run: mix test

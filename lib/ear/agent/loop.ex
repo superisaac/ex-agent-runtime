@@ -121,51 +121,21 @@ defmodule Ear.Agent.Loop do
 
   def handle_info(:run, state) do
     token = make_ref()
+    owner = self()
 
     task =
       Task.Supervisor.async_nolink(Ear.TaskSupervisor, fn ->
-        invoke_adapter_with_context(state, token)
+        invoke_adapter_with_context(state, token, owner)
       end)
 
     {:noreply, %{state | model_task: task, stream_token: token, stream_chunks: []}}
   end
 
-  def handle_info({:model_stream_chunk, token, chunks}, %{stream_token: token} = state)
-      when is_list(chunks) do
-    if state.cancelled or state.status != :running do
-      {:noreply, state}
+  def handle_info({:model_stream_chunk, token, chunks}, %{stream_token: token} = state) do
+    if valid_chunks?(chunks) do
+      receive_stream_chunks(chunks, state)
     else
-      text_size =
-        chunks
-        |> Enum.filter(&(&1[:type] == :text_delta))
-        |> Enum.map(&String.length(&1[:text] || ""))
-        |> Enum.sum()
-
-      current_size =
-        state.stream_chunks
-        |> Enum.filter(&(&1[:type] == :text_delta))
-        |> Enum.map(&String.length(&1[:text] || ""))
-        |> Enum.sum()
-
-      if current_size + text_size > state.max_output_chars do
-        finish(state, :run_failed, %{reason: :max_output_chars, size: current_size + text_size})
-      else
-        state =
-          Enum.reduce(chunks, state, fn
-            %{type: :text_delta, text: text}, acc ->
-              emit_to_subscribers(acc, :message_delta, %{text: text})
-
-            _, acc ->
-              acc
-          end)
-
-        {:noreply,
-         %{
-           state
-           | stream_chunks: state.stream_chunks ++ chunks,
-             stream_text_emitted: state.stream_text_emitted or text_size > 0
-         }}
-      end
+      finish(state, :run_failed, %{reason: :malformed_model_response})
     end
   end
 
@@ -174,7 +144,7 @@ defmodule Ear.Agent.Loop do
   def handle_info({ref, result}, %{model_task: %Task{ref: ref}} = state) do
     Process.demonitor(ref, [:flush])
     streamed_chunks = state.stream_chunks
-    state = %{state | model_task: nil, stream_token: nil, stream_chunks: []}
+    state = %{state | model_task: nil, stream_token: nil}
 
     case result do
       {:ok, response, adapter} ->
@@ -241,13 +211,45 @@ defmodule Ear.Agent.Loop do
     :ok
   end
 
-  defp invoke_adapter_with_context(state, token),
+  defp receive_stream_chunks(chunks, state) do
+    text_size = stream_text_size(chunks)
+    current_size = stream_text_size(state.stream_chunks)
+
+    if current_size + text_size > state.max_output_chars do
+      finish(state, :run_failed, %{reason: :max_output_chars, size: current_size + text_size})
+    else
+      state =
+        Enum.reduce(chunks, state, fn
+          %{type: :text_delta, text: text}, acc ->
+            emit_to_subscribers(acc, :message_delta, %{text: text})
+
+          _, acc ->
+            acc
+        end)
+
+      {:noreply,
+       %{
+         state
+         | stream_chunks: state.stream_chunks ++ chunks,
+           stream_text_emitted: state.stream_text_emitted or text_size > 0
+       }}
+    end
+  end
+
+  defp stream_text_size(chunks) do
+    Enum.reduce(chunks, 0, fn
+      %{type: :text_delta, text: text}, size -> size + String.length(text)
+      _, size -> size
+    end)
+  end
+
+  defp invoke_adapter_with_context(state, token, owner),
     do:
       invoke_adapter(state, %{
         run_id: state.run_id,
         workspace: state.workspace,
         tool_context: state.tool_context,
-        stream_owner: self(),
+        stream_owner: owner,
         stream_token: token
       })
 
@@ -290,13 +292,21 @@ defmodule Ear.Agent.Loop do
     end
   end
 
-  defp dispatch_response(response, state, streamed_chunks)
+  defp dispatch_response(response, state, streamed_chunks) do
+    if valid_response?(response) do
+      dispatch_valid_response(response, state, streamed_chunks)
+    else
+      finish(state, :run_failed, %{reason: :malformed_model_response})
+    end
+  end
 
-  defp dispatch_response(%{tool_calls: calls} = response, state, _streamed_chunks)
+  defp dispatch_valid_response(response, state, streamed_chunks)
+
+  defp dispatch_valid_response(%{tool_calls: calls} = response, state, _streamed_chunks)
        when is_list(calls) and calls != [],
        do: handle_tool_response(calls, state, response[:text] || "")
 
-  defp dispatch_response(%{chunks: chunks}, state, streamed_chunks) when is_list(chunks),
+  defp dispatch_valid_response(%{chunks: chunks}, state, streamed_chunks) when is_list(chunks),
     do:
       handle_chunk_response(
         if(streamed_chunks == [], do: chunks, else: streamed_chunks),
@@ -304,13 +314,17 @@ defmodule Ear.Agent.Loop do
         streamed_chunks == []
       )
 
-  defp dispatch_response(%{text: _text}, state, streamed_chunks) when streamed_chunks != [],
+  defp dispatch_valid_response(%{text: _text}, state, streamed_chunks) when streamed_chunks != [],
     do: handle_chunk_response(streamed_chunks, state, false)
 
-  defp dispatch_response(response, state, _streamed_chunks), do: handle_response(response, state)
+  defp dispatch_valid_response(response, state, _streamed_chunks),
+    do: handle_response(response, state)
 
   defp handle_tool_response(calls, state, text) do
     cond do
+      not valid_tool_calls?(calls) ->
+        finish(state, :run_failed, %{reason: :malformed_model_response})
+
       String.length(text) > state.max_output_chars ->
         finish(state, :run_failed, %{reason: :max_output_chars, size: String.length(text)})
 
@@ -339,7 +353,13 @@ defmodule Ear.Agent.Loop do
           )
     }
 
-    next_tool(%{state | pending_tools: calls, tool_results: [], stream_text_emitted: false})
+    next_tool(%{
+      state
+      | pending_tools: calls,
+        tool_results: [],
+        stream_text_emitted: false,
+        stream_chunks: []
+    })
   end
 
   defp next_tool(%{pending_tools: [call | rest]} = state) do
@@ -468,6 +488,7 @@ defmodule Ear.Agent.Loop do
           %{
             state
             | transcript: transcript,
+              stream_chunks: [],
               request: refresh_request(state.request, transcript, nil)
           },
           :run_completed,
@@ -516,6 +537,7 @@ defmodule Ear.Agent.Loop do
         %{
           state
           | transcript: transcript,
+            stream_chunks: [],
             request: refresh_request(state.request, transcript, nil)
         },
         :run_completed,
@@ -524,9 +546,11 @@ defmodule Ear.Agent.Loop do
     end
   end
 
-  defp handle_response(_, state), do: finish(state, :run_completed, %{text: ""})
+  defp handle_response(_, state),
+    do: finish(state, :run_failed, %{reason: :malformed_model_response})
 
   defp finish(state, type, payload) do
+    {state, payload} = preserve_partial_response(state, type, payload)
     event = Event.new(state.run_id, state.seq + 1, type, payload)
 
     snapshot =
@@ -542,6 +566,85 @@ defmodule Ear.Agent.Loop do
     Enum.each(state.subscribers, &send(&1, {:ear, event}))
     {:stop, :normal, %{state | status: type_to_status(type), seq: event.seq}}
   end
+
+  defp preserve_partial_response(state, :run_completed, payload), do: {state, payload}
+
+  defp preserve_partial_response(%{stream_chunks: []} = state, _type, payload),
+    do: {state, payload}
+
+  defp preserve_partial_response(state, _type, payload) do
+    text =
+      Enum.map_join(state.stream_chunks, "", fn
+        %{type: :text_delta, text: text} -> text
+        _ -> ""
+      end)
+
+    tool_deltas = Enum.filter(state.stream_chunks, &(&1.type == :tool_call_delta))
+
+    if text == "" and tool_deltas == [] do
+      {state, payload}
+    else
+      message =
+        Message.new(:assistant, text,
+          metadata: %{partial: true, reason: payload[:reason], tool_call_deltas: tool_deltas}
+        )
+
+      state = %{
+        state
+        | transcript: Transcript.append(state.transcript, message),
+          stream_chunks: []
+      }
+
+      state = emit_to_subscribers(state, :message_completed, %{text: text, partial: true})
+      partial = %{text: text, message_id: message.id, tool_call_deltas: tool_deltas}
+      {state, Map.put(payload, :partial_result, partial)}
+    end
+  end
+
+  defp valid_response?(response) when is_map(response) do
+    recognized? =
+      Map.has_key?(response, :text) or Map.has_key?(response, :chunks) or
+        (is_list(response[:tool_calls]) and response[:tool_calls] != [])
+
+    recognized? and
+      (not Map.has_key?(response, :text) or is_binary(response[:text])) and
+      (not Map.has_key?(response, :chunks) or valid_chunks?(response[:chunks])) and
+      (not Map.has_key?(response, :tool_calls) or valid_tool_calls?(response[:tool_calls]))
+  end
+
+  defp valid_response?(_), do: false
+
+  defp valid_tool_calls?(calls) when is_list(calls) do
+    Enum.all?(calls, fn
+      call when is_map(call) ->
+        id = call[:id] || call["id"]
+        name = call[:name] || call["name"]
+
+        is_binary(id) and id != "" and is_binary(name) and name != "" and
+          (Map.has_key?(call, :args) or Map.has_key?(call, "args"))
+
+      _ ->
+        false
+    end) and
+      length(calls) == length(Enum.uniq_by(calls, &(&1[:id] || &1["id"])))
+  end
+
+  defp valid_tool_calls?(_), do: false
+
+  defp valid_chunks?(chunks) when is_list(chunks), do: Enum.all?(chunks, &valid_chunk?/1)
+  defp valid_chunks?(_), do: false
+
+  defp valid_chunk?(%{type: :text_delta, text: text}), do: is_binary(text)
+
+  defp valid_chunk?(%{type: :tool_call_delta, index: index, arguments: arguments} = chunk) do
+    is_integer(index) and index >= 0 and is_binary(arguments) and
+      Enum.all?([:id, :name], &(is_nil(chunk[&1]) or is_binary(chunk[&1])))
+  end
+
+  defp valid_chunk?(%{type: :usage, usage: usage}), do: is_map(usage)
+  defp valid_chunk?(%{type: :finish_reason, reason: reason}), do: is_binary(reason)
+  defp valid_chunk?(%{type: :provider_metadata, metadata: metadata}), do: is_map(metadata)
+  defp valid_chunk?(_), do: false
 
   defp emit_to_subscribers(state, type, payload),
     do: emit_to_subscribers(state, type, payload, [])

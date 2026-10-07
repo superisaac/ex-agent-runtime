@@ -119,6 +119,7 @@ defmodule Ear.TUITest do
 
     assert :ok =
              Ear.TUI.start(
+               config: false,
                fullscreen: true,
                ansi: false,
                adapter: Ear.Model.Scripted.new([%{text: "ok"}]),
@@ -139,6 +140,7 @@ defmodule Ear.TUITest do
     output =
       capture_io(fn ->
         Ear.TUI.start(
+          config: false,
           ansi: false,
           input: fn _prompt ->
             case Agent.get_and_update(counter, fn
@@ -164,6 +166,7 @@ defmodule Ear.TUITest do
     output =
       capture_io(fn ->
         Ear.TUI.start(
+          config: false,
           ansi: false,
           input: fn _prompt ->
             case Agent.get_and_update(counter, fn
@@ -194,6 +197,7 @@ defmodule Ear.TUITest do
       task =
         Task.async(fn ->
           Ear.TUI.start(
+            config: false,
             adapter: Ear.Model.Scripted.new([%{text: "hello"}]),
             renderer: fn event -> send(owner, {:rendered, self(), event}) end,
             input: fn _prompt ->
@@ -226,6 +230,7 @@ defmodule Ear.TUITest do
     tui =
       spawn(fn ->
         Ear.TUI.start(
+          config: false,
           adapter: Ear.Model.Scripted.new([%{text: "hello"}]),
           renderer: fn event -> send(owner, {:rendered, self(), event}) end,
           input: fn _ ->
@@ -250,6 +255,7 @@ defmodule Ear.TUITest do
     task =
       Task.async(fn ->
         Ear.TUI.start(
+          config: false,
           adapter: %Ear.TestSupport.BlockingAdapter{owner: owner},
           input: fn _ -> Agent.get_and_update(inputs, fn [head | tail] -> {head, tail} end) end,
           renderer: fn _ -> :ok end

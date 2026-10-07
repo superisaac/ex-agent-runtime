@@ -22,6 +22,10 @@ defmodule Ear.TUI.Fullscreen do
   alias Ear.TUI.{Session, Command}
 
   def start(opts \\ []) do
+    with {:ok, opts} <- Ear.Config.User.prepare_tui(opts), do: start_session(opts)
+  end
+
+  defp start_session(opts) do
     owner = self()
     ansi = Keyword.get(opts, :ansi, true)
     key_input = Keyword.get(opts, :key_input, fn -> IO.getn("", 1) end)

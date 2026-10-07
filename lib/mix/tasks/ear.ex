@@ -37,12 +37,7 @@ defmodule Mix.Tasks.Ear do
       |> maybe_put(:endpoint, cli_opts[:endpoint])
       |> maybe_put(:model, cli_opts[:model])
 
-    opts =
-      if adapter_opts != [] or is_binary(System.get_env("OPENAI_API_KEY")) do
-        [adapter: Ear.Model.OpenAI.new(adapter_opts)]
-      else
-        []
-      end
+    opts = adapter_opts
 
     opts = if cli_opts[:no_ansi], do: [{:ansi, false} | opts], else: opts
     opts = if cli_opts[:fullscreen], do: [{:fullscreen, true} | opts], else: opts
@@ -50,7 +45,10 @@ defmodule Mix.Tasks.Ear do
     opts =
       if cli_opts[:skill_root], do: [{:skill_roots, cli_opts[:skill_root]} | opts], else: opts
 
-    Ear.TUI.start(opts)
+    case Ear.TUI.start(opts) do
+      {:error, reason} -> Mix.raise("Unable to start ear: #{inspect(reason)}")
+      result -> result
+    end
   end
 
   defp maybe_put(opts, _key, nil), do: opts

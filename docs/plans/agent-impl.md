@@ -348,15 +348,128 @@ The first release is ready when a clean checkout can start the OTP application, 
 
 ## 19. Current implementation status
 
-The first-release scope is implemented and covered by the offline test suite. The
-current implementation also includes bounded run snapshot retention, monitored
-event subscribers, TUI conversation history, ANSI-disabled rendering, a
-full-screen alternate-buffer TUI with editable input and transcript scrolling,
-secure filesystem traversal with symlink and cycle handling, configurable
-macOS OS-level shell isolation, supervised tool workers, approval and execution
-deadlines, and OpenAI-compatible complete and live network-level SSE responses.
+Last assessed: **2026-10-07**, against the current working tree, including the
+Linux sandbox changes. This is an implementation assessment, not a published
+release or confirmation that remote CI has passed.
 
-The following remain follow-up work: Linux-native sandbox backends and richer
-terminal integrations such as mouse support and syntax highlighting. Shell
-output is now collected incrementally with a hard byte limit. MCP and
-multi-agent execution remain outside this implementation scope.
+**Overall: a usable first-version agent is implemented, but the full definition
+of done in section 18 has not yet been met.** The public API, supervised loop,
+model integration, local tools, skill loading, and interactive TUI work together
+and have offline regression coverage. Several planned contracts and verification
+requirements remain incomplete. A numerical completion percentage would obscure
+those gaps, so progress is tracked by delivery phase and remaining acceptance
+criteria below.
+
+### 19.1 Delivery phase progress
+
+| Phase | Status | Implemented evidence | Remaining acceptance work |
+| --- | --- | --- | --- |
+| 0: Project skeleton | Implemented; documentation incomplete | Mix application, OTP supervision, public facade, formatter, offline tests, and GitHub Actions workflow. | Add public module/function documentation and an enforceable documentation check. |
+| 1: Core data and event contracts | Partial | Message/transcript/event structs, option validation, JSON-safe event conversion, sequenced events, and monitored subscribers. | Complete message validation and serialization, timestamps/versioning, validated configuration struct, normalized errors, and documented publisher/backpressure contract. |
+| 2: Model adapter and loop | Functional; acceptance gaps remain | Scripted and OpenAI-compatible adapters, complete and live SSE responses, supervised model workers, cancellation, deadlines, run limits, partial-result preservation, and normalized response-shape validation. | Complete finish-reason/usage semantics and broader protocol/invariant coverage. |
+| 3: Tools | Functional; metadata contract incomplete | Registry validation, argument callbacks, sequential continuation, approval/allowlist policy, supervised workers, timeouts, bounded results, and local file/shell tools. | Define side-effect/confirmation/per-tool timeout metadata and a consistent safe error representation. Verify Linux isolation on a capable Linux host. |
+| 4: Skills | Partial | Local discovery, explicit selection, duplicate-name handling, priority/name prompt ordering, size/containment checks, and skill loading/error events. | Enforce front matter types and name rules, define/test source precedence and disabled-skill metadata behavior, add strict failure policy/tag lookup and built-in examples. |
+| 5: Integration surface | Functional; acceptance gaps remain | Synchronous collection, CLI, line-oriented/full-screen TUI, required commands, injected input/auth/rendering, conversation history, cancellation, and bounded shutdown waits. | Resolve parser differences from section 6, complete terminal-I/O abstraction and shutdown diagnostics, and expand real-terminal verification. |
+
+The proposed file tree is not a required one-to-one module checklist. Today,
+the run lifecycle, state, and event delivery are implemented in `Ear.Agent.Loop`;
+skills use loader/prompt modules and maps rather than a separate registry struct.
+These layout choices are acceptable where behavior is equivalent, but missing
+contracts and acceptance tests are still tracked as unfinished work.
+
+### 19.2 Working capabilities
+
+- Public `start_run`, `run`, `run_with_events`, subscription, cancellation, and
+  snapshot APIs, with supervised concurrent run processes and bounded in-memory
+  snapshot retention. `start_run/2` currently returns `{:ok, run_id, pid}`, which
+  differs from the proposed two-element result in section 5.
+- OpenAI-compatible HTTP completion and incremental SSE transport, including
+  tool-call fragments and continuation; a scripted adapter keeps default tests
+  independent of external model services.
+- Live stream chunks are delivered to the run process before model completion.
+  Cancellation, provider failure, worker crash, deadline expiration, and output
+  limits preserve accepted text/tool fragments in partial assistant messages and
+  terminal `partial_result` metadata. Malformed response shapes fail explicitly;
+  incomplete tool fragments are retained without execution. Regression tests
+  cover these paths, batch ordering, and duplicate-free tool continuation.
+- Registered `echo`, `file_read`, `file_write`, `file_list`, and `shell` tools;
+  filesystem containment checks handle escaping symlinks and directory cycles.
+  Tool workers and approval callbacks are bounded by deadlines, and shell output
+  is collected incrementally with a hard byte limit.
+- Shell isolation via macOS `sandbox-exec` or Linux Bubblewrap. Linux uses
+  runtime availability probing, read-only runtime mounts, writable workspace
+  mounts, private temporary storage, dropped capabilities, and process/network
+  namespaces. `:strict` rejects unavailable backends; `:workspace` retains its
+  documented fallback; networking requires an explicit option.
+- Local Markdown skills integrated into system instructions, with loaded/error
+  events and TUI listing/reloading commands.
+- `mix ear`, streamed terminal output, environment-backed OpenAI login, all six
+  initial slash commands, and additional history/status/run-management commands.
+  Full-screen mode provides editable input, transcript scrolling, resize polling,
+  and Ctrl-C handling; plain-text rendering is also available.
+- Pi-style user configuration in `~/.ear/agent/models.yaml` and `settings.yaml`,
+  checked by both TUI modes before input starts. Missing files are initialized
+  from supported environment variables without overwriting existing files.
+  Multiple OpenAI-compatible providers/models, default selection, terminal
+  preferences, optional limits, and explicit startup overrides are supported.
+  `apiEnvKey` names the credential environment variable; inline API keys are
+  rejected. Default login refreshes that credential without changing the
+  configured endpoint/model. The loader uses `yaml_elixir` for YAML parsing.
+
+### 19.3 Remaining work, in priority order
+
+1. **Complete model completion policy.** Partial-result preservation and response
+   shape rejection are implemented. Define handling for nonterminal/provider
+   finish reasons, propagate streamed usage/finish metadata consistently, and
+   broaden contract tests beyond response structure and termination paths.
+2. **Finish core contracts.** Add normalized error categories, safe messages,
+   retryability, and error redaction; complete message validation, creation
+   timestamps, explicit schema versions, configuration validation, and snapshot
+   metadata. The current implementation uses maps and raw reason atoms/tuples
+   for several boundaries described as versioned structs in the plan.
+3. **Complete the event contract.** Implement or explicitly revise the planned
+   `message_started`, `skill_skipped`, `tool_call_delta`, `limit_reached`, and
+   `warning` events. Document subscriber mailbox/backpressure behavior and add
+   invariant tests for terminal-event uniqueness, ordering, and correlation.
+   Current asynchronous sends isolate subscribers but do not bound their mailboxes.
+4. **Harden skill selection and parsing.** The parser handles a small front
+   matter subset and permissively defaults some invalid values. Add strict
+   validation and `:fail` policy, deterministic precedence tests, accurate enabled
+   selection metadata, tag indexing, built-in skills, and reproducible prompt
+   metadata including tool descriptions and limits.
+5. **Reconcile the TUI specification with behavior.** Commands currently ignore
+   case and input parsing trims prompt whitespace, unlike section 6. Quoted
+   argument parsing and `/help [command]` need completion or a documented design
+   revision. Terminal output still calls `IO` directly in several modules, and
+   shutdown timeout paths need diagnostic messages. `/login` validates environment
+   credentials; OAuth and credential storage are not implemented.
+6. **Close verification gaps.** Add property tests, broader pure contract tests,
+   documentation checks, and static analysis. Run the Linux sandbox integration
+   tests on a host permitting user namespaces, and record the CI result. Verify
+   actual terminal resize/EOF/Ctrl-C behavior and an opt-in real-provider run.
+
+Mouse support and syntax highlighting remain optional terminal enhancements.
+MCP, multi-agent execution, persistent conversation storage, distributed
+operation, and a production-grade sandbox remain outside this release scope.
+
+### 19.4 Latest verification
+
+- `mix test`: **166 passed, 1 skipped** on the current macOS development host.
+  The skipped test exercises actual Linux Bubblewrap filesystem and temporary
+  directory isolation; launch-argument tests run on all platforms.
+- The latest increment adds 15 regression tests for live delivery, partial
+  results, malformed responses, terminal ordering/uniqueness, and tool
+  continuation. These are example-based tests, not a property-testing suite.
+- User configuration has 16 tests covering initialization, environment defaults,
+  existing-file preservation, YAML validation, model/provider selection, option
+  precedence, credential isolation, login refresh, and startup in both TUI modes.
+  Configuration tests use temporary directories rather than the actual user home.
+- `mix format --check-formatted` and `git diff --check`: passed.
+- CI is configured for Ubuntu, installs Bubblewrap, fetches Mix dependencies, and runs formatting and
+  tests. Namespace availability is probed, so installation alone does not ensure
+  the Linux integration test executes. Remote CI results have not been verified.
+- OpenAI transport tests use local HTTP fixtures; no live provider credentials
+  or external model service were required for this verification.
+- Property testing, Credo/static analysis, and documentation checks are not yet
+  configured. The passing suite establishes regression coverage for implemented
+  behavior, not completion of every requirement in this plan.

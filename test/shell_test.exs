@@ -41,4 +41,15 @@ defmodule Ear.ShellTest do
                shell_isolation: :none
              })
   end
+
+  test "strict mode refuses execution when isolation is unavailable" do
+    unless Ear.Tools.Shell.isolation_available?(:strict) do
+      backend = if :os.type() == {:unix, :linux}, do: :bubblewrap, else: :sandbox_exec
+
+      assert {:error, {:isolation_unavailable, ^backend}} =
+               Ear.Tools.Shell.execute(%{"command" => "printf must-not-run"}, %{
+                 shell_isolation: :strict
+               })
+    end
+  end
 end

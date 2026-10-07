@@ -24,6 +24,13 @@ Start the basic interactive UI with `Ear.TUI.start/0`. It accepts
 prompts and `/help`, `/login`, `/skills`, `/reload-skills`, `/status`, `/history`, `/runs`,
 `/clear-runs`, `/cancel`, `/clear`, `/exit`, and `/quit`. Completed runs remain in the
 session context for subsequent prompts.
+On startup, both TUI modes create missing `~/.ear/agent/models.yaml` and
+`~/.ear/agent/settings.yaml` from environment defaults, then read the selected
+provider/model and terminal preferences. Existing files are preserved. Models
+use a Pi-style `providers` registry with `baseUrl`, `api`, `apiEnvKey`, and
+`models`; credentials are resolved from the named environment variable and are
+never written to configuration. See [User Configuration](docs/usage.md#user-configuration)
+for the YAML format and precedence rules.
 The TUI forwards adapter options supplied to `start/1`:
 
 ```elixir
@@ -64,8 +71,16 @@ when no sandbox backend is available, or `:none` for legacy behavior. The
 default `:workspace` mode falls back to legacy execution when the backend is
 unavailable; use `:strict` to reject that fallback.
 
-The default `/login openai` command checks `OPENAI_API_KEY` without printing
-the secret. Applications can inject a different auth adapter into
+On Linux, install `bubblewrap` (`bwrap`) and enable unprivileged user namespaces
+to use isolation. The Linux backend mounts runtime files read-only, allows
+workspace writes, provides a private temporary directory, and isolates process
+and network namespaces. Set `shell_network: true` in the tool context to allow
+network access. Backend availability is checked by launching a sandbox, since
+some container hosts disable namespace creation even when `bwrap` is installed.
+
+The default `/login` command checks the selected provider's `apiEnvKey` without
+printing the secret and preserves its configured endpoint and model.
+Applications can inject a different auth adapter into
 `Ear.TUI.start/1` when credentials are stored elsewhere.
 
 The same UI can be launched directly from the shell:
