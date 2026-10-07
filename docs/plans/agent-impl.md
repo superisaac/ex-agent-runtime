@@ -415,6 +415,30 @@ contracts and acceptance tests are still tracked as unfinished work.
   `apiEnvKey` names the credential environment variable; inline API keys are
   rejected. Default login refreshes that credential without changing the
   configured endpoint/model. The loader uses `yaml_elixir` for YAML parsing.
+- TUI runs now register read-only `file_list` and `file_read` by default, so the
+  model can inspect the current workspace for project-analysis prompts. Mutating
+  file and shell tools remain explicit opt-ins.
+- TUI event rendering is quiet by default: assistant text and terminal errors
+  remain visible while lifecycle and tool diagnostics are suppressed. The
+  `--verbose` CLI flag and `verbose: true` API option select the full renderer;
+  event subscription behavior is unchanged.
+- The CLI accepts `--workspace DIR` to select the directory exposed to the TUI's
+  file tools and model context; it expands the path and defaults to `File.cwd!()`.
+- Quiet TUI prompt handling now redraws `ear>` after terminal events and ignores
+  blank input, preventing an accidental `:empty_prompt` error when the prompt
+  was visible before asynchronous assistant output completed.
+- Default line-oriented TUI input enables and restores Erlang terminal mode and
+  `line_history` when standard input is a terminal, providing readline-style
+  editing/history (including Home/End control keys) without affecting injected
+  input functions.
+- The line-oriented TUI now includes its own raw-terminal readline editor so
+  `Ctrl-A`, `Ctrl-E`, `Ctrl-K`, `Ctrl-U`, arrows, backspace, deletion, and input
+  history work even when the Erlang driver does not expose line editing. The
+  original `stty` state is restored on shutdown.
+- The TUI config layer uses a larger interactive inspection budget by default
+  (`maxTurns: 16`, `maxToolCalls: 64`) so project-analysis prompts can inspect
+  normal repositories. Explicit values in `settings.yaml` still take precedence;
+  library `Ear.run/2` defaults remain conservative.
 
 ### 19.3 Remaining work, in priority order
 
@@ -454,7 +478,7 @@ operation, and a production-grade sandbox remain outside this release scope.
 
 ### 19.4 Latest verification
 
-- `mix test`: **166 passed, 1 skipped** on the current macOS development host.
+- `mix test`: **176 passed, 1 skipped** on the current macOS development host.
   The skipped test exercises actual Linux Bubblewrap filesystem and temporary
   directory isolation; launch-argument tests run on all platforms.
 - The latest increment adds 15 regression tests for live delivery, partial
@@ -464,6 +488,8 @@ operation, and a production-grade sandbox remain outside this release scope.
   existing-file preservation, YAML validation, model/provider selection, option
   precedence, credential isolation, login refresh, and startup in both TUI modes.
   Configuration tests use temporary directories rather than the actual user home.
+- TUI tool defaults have a regression test confirming read-only project inspection
+  tools are enabled while file-write and shell tools remain opt-in.
 - `mix format --check-formatted` and `git diff --check`: passed.
 - CI is configured for Ubuntu, installs Bubblewrap, fetches Mix dependencies, and runs formatting and
   tests. Namespace availability is probed, so installation alone does not ensure

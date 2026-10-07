@@ -1,8 +1,26 @@
 defmodule Ear.TUI do
   alias Ear.TUI.{Command, Session}
 
+  @doc "Returns the read-only project inspection tools enabled for TUI runs."
+  def default_tool_modules, do: [Ear.Tools.FileList, Ear.Tools.FileRead]
+
+  @doc "Returns the workspace used by a TUI invocation, defaulting to the current directory."
+  def workspace(opts \\ []), do: Path.expand(Keyword.get(opts, :workspace, File.cwd!()))
+
   def start(opts \\ []) do
     with {:ok, opts} <- Ear.Config.User.prepare_tui(opts) do
+      opts =
+        opts
+        |> Keyword.put(:workspace, workspace(opts))
+        |> Keyword.put_new(:tool_modules, default_tool_modules())
+        |> Keyword.put_new(
+          :renderer,
+          if(Keyword.get(opts, :verbose, false),
+            do: Ear.TUI.Renderer,
+            else: Ear.TUI.QuietRenderer
+          )
+        )
+
       if Keyword.get(opts, :fullscreen, false) do
         Ear.TUI.Fullscreen.start(Keyword.put(opts, :config, false))
       else
@@ -16,6 +34,9 @@ defmodule Ear.TUI do
     renderer = Keyword.get(opts, :renderer, Ear.TUI.Renderer)
     input = Keyword.get(opts, :input, &IO.gets/1)
     ansi = Keyword.get(opts, :ansi, true)
+    readline? = not Keyword.has_key?(opts, :input)
+    readline_state = if readline?, do: Ear.TUI.Readline.new(), else: nil
+    io_options = if readline?, do: enable_readline(), else: nil
     {event_pid, event_ref} = spawn_monitor(fn -> event_loop(owner, renderer) end)
 
     try do
@@ -30,7 +51,7 @@ defmodule Ear.TUI do
         |> Keyword.put(:subscriber, event_pid)
         |> Keyword.put(:run_opts, opts)
 
-      loop(Session.new(session_opts), input, ansi)
+      loop(Session.new(session_opts), input, ansi, readline_state)
     after
       send(event_pid, :stop)
 
@@ -41,13 +62,52 @@ defmodule Ear.TUI do
           Process.exit(event_pid, :kill)
           Process.demonitor(event_ref, [:flush])
       end
+
+      restore_readline(io_options)
     end
   end
 
-  defp loop(%Session{running: false}, _input, _ansi), do: :ok
+  defp enable_readline do
+    saved = :io.getopts(:standard_io)
 
-  defp loop(session, input, ansi) do
-    case input.("ear> ") do
+    case System.cmd("stty", ["-g"], stderr_to_stdout: true) do
+      {tty_state, 0} ->
+        case System.cmd("stty", ["-icanon", "min", "1", "-echo"], stderr_to_stdout: true) do
+          {_output, 0} ->
+            :io.setopts(:standard_io, terminal: true, line_history: true)
+            {:tty, String.trim(tty_state), saved}
+
+          _ ->
+            nil
+        end
+
+      _ ->
+        nil
+    end
+  rescue
+    _ -> nil
+  end
+
+  defp restore_readline(nil), do: :ok
+
+  defp restore_readline({:tty, tty_state, saved}) do
+    System.cmd("stty", [tty_state], stderr_to_stdout: true)
+    :io.setopts(:standard_io, saved)
+  rescue
+    _ -> :ok
+  end
+
+  defp loop(%Session{running: false}, _input, _ansi, _readline), do: :ok
+
+  defp loop(session, input, ansi, readline) do
+    {result, readline} =
+      if is_struct(readline, Ear.TUI.Readline) do
+        Ear.TUI.Readline.gets(readline)
+      else
+        {input.("ear> "), readline}
+      end
+
+    case result do
       :eof ->
         Session.handle(session, {:command, "exit", ""})
         await_shutdown(session.run_id)
@@ -62,7 +122,9 @@ defmodule Ear.TUI do
         {session, result} = Session.handle(session, Command.parse(line))
         display(result, ansi)
 
-        if session.running, do: loop(session, input, ansi), else: await_shutdown(session.run_id)
+        if session.running,
+          do: loop(session, input, ansi, readline),
+          else: await_shutdown(session.run_id)
     end
   end
 

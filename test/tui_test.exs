@@ -40,6 +40,23 @@ defmodule Ear.TUITest do
     assert output == "hello\n"
   end
 
+  test "empty TUI prompts are ignored" do
+    session = Ear.TUI.Session.new()
+    assert {^session, :ok} = Ear.TUI.Session.handle(session, {:prompt, "   "})
+  end
+
+  test "quiet renderer hides lifecycle events and keeps assistant output" do
+    output =
+      capture_io(fn ->
+        Ear.TUI.QuietRenderer.render(%{type: :run_started})
+        Ear.TUI.QuietRenderer.render(%{type: :tool_call_started})
+        Ear.TUI.QuietRenderer.render(%{type: :message_delta, payload: %{text: "hello"}})
+        Ear.TUI.QuietRenderer.render(%{type: :run_completed})
+      end)
+
+    assert output == "hello\n\near> "
+  end
+
   test "renderer reports skill lifecycle events" do
     output =
       capture_io(fn ->

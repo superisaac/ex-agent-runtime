@@ -31,11 +31,24 @@ use a Pi-style `providers` registry with `baseUrl`, `api`, `apiEnvKey`, and
 `models`; credentials are resolved from the named environment variable and are
 never written to configuration. See [User Configuration](docs/usage.md#user-configuration)
 for the YAML format and precedence rules.
+The default renderer is quiet and shows assistant output without lifecycle
+diagnostics. Pass `verbose: true` to `Ear.TUI.start/1`, or use `mix ear
+--verbose`, to display run, skill, and tool events.
+Use `mix ear --workspace /path/to/project` to choose the workspace inspected by
+the TUI; without it, the current directory is used.
+The line-oriented TUI enables Erlang terminal line history for the default
+terminal input, providing readline-style editing and history. Injected `input`
+functions used by applications and tests are left unchanged.
 The TUI forwards adapter options supplied to `start/1`:
 
 ```elixir
 Ear.TUI.start(adapter: Ear.Model.Scripted.new([%{text: "Hello"}]))
 ```
+
+TUI runs automatically expose the read-only `file_list` and `file_read` tools,
+using the current working directory as the workspace. This lets the model
+inspect a project when asked to analyze it. `file_write` and `shell` remain
+explicit opt-in tools for library callers.
 
 For a full-screen terminal session, use `Ear.TUI.start(fullscreen: true)`.
 It uses an alternate screen buffer, editable input, cursor movement, transcript

@@ -151,6 +151,14 @@ defmodule Ear.Config.User do
         skill_roots: Map.get(settings, "skillRoots", [])
       ]
 
+      # Project analysis often needs several directory listings and file reads.
+      # Keep library defaults conservative, but give the interactive TUI enough
+      # budget to inspect a normal project before producing its summary.
+      configured =
+        configured
+        |> Keyword.put(:max_turns, Map.get(settings, "maxTurns", 16))
+        |> Keyword.put(:max_tool_calls, Map.get(settings, "maxToolCalls", 64))
+
       configured =
         Enum.reduce(@run_limits, configured, fn {key, option}, acc ->
           if Map.has_key?(settings, key), do: Keyword.put(acc, option, settings[key]), else: acc

@@ -72,8 +72,8 @@ ansi: true
 fullscreen: false
 skillRoots: []
 # Optional non-negative run limits:
-# maxTurns: 8
-# maxToolCalls: 16
+# maxTurns: 16
+# maxToolCalls: 64
 # maxOutputChars: 100000
 # maxElapsedMs: 60000
 # toolTimeoutMs: 30000
@@ -105,7 +105,24 @@ directory, or explicitly disable file initialization with `config: false`.
 The non-TUI run API continues to accept injected adapters and environment defaults.
 
 The Mix task accepts `--endpoint URL`, `--model NAME`, repeated
-`--skill-root PATH`, `--no-ansi`, and `--fullscreen` in addition to `--help`.
+`--workspace DIR`, `--skill-root PATH`, `--no-ansi`, `--fullscreen`, and
+`--verbose` in addition to `--help`. The workspace defaults to the current
+directory and is passed to file tools and adapter context.
+
+The default TUI renderer is quiet: assistant text and terminal errors remain
+visible, while run, skill, and tool lifecycle events are suppressed. Pass
+`verbose: true` to `Ear.TUI.start/1`, or use `mix ear --verbose`, to display
+those diagnostics. Event subscribers still receive every structured event in
+both modes. After a terminal event, quiet mode redraws the `ear>` prompt. A
+blank line entered at the prompt is ignored rather than submitted as a model
+request.
+
+The line-oriented TUI uses a raw-terminal readline editor for its default input,
+providing line editing and history (including `Ctrl-A`/Home, `Ctrl-E`/End,
+`Ctrl-K`, `Ctrl-U`, arrows, and deletion). Erlang terminal mode and
+`line_history` are enabled when standard input is a terminal, and the original
+`stty`/I/O options are restored when the session exits. An injected `input`
+function bypasses terminal configuration and is useful for embedding and tests.
 
 Set `OPENAI_API_KEY` before starting to use the OpenAI-compatible adapter. The
 following environment variables are supported:
@@ -260,8 +277,11 @@ Skill roots can be supplied to inject local `SKILL.md` instructions:
 Ear.TUI.start(skill_roots: ["./priv/skills"])
 ```
 
-Built-in tools are opt-in and include `file_read`, `file_write`, `file_list`,
-and `shell`. Register only the tools a run needs. File tools resolve real
+Built-in tools are opt-in for library calls and include `file_read`, `file_write`,
+`file_list`, and `shell`. The TUI automatically registers the read-only
+`file_list` and `file_read` tools so prompts such as "analyze this project" can
+inspect the current workspace. The TUI does not register write or shell tools.
+For library calls, register only the tools a run needs. File tools resolve real
 paths and reject symlinks that escape the configured workspace; shell execution
 should also use `allowed_tools` and an approval callback:
 

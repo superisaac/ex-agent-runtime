@@ -15,19 +15,23 @@ defmodule Ear.TUI.Session do
   def new(opts \\ []), do: struct!(__MODULE__, opts)
 
   def handle(%__MODULE__{} = session, {:prompt, prompt}) do
-    if active_run?(session.run_id) do
-      {session, {:error, :run_in_progress}}
+    if String.trim(prompt) == "" do
+      {session, :ok}
     else
-      subscriber = session.subscriber || self()
+      if active_run?(session.run_id) do
+        {session, {:error, :run_in_progress}}
+      else
+        subscriber = session.subscriber || self()
 
-      run_opts =
-        session.run_opts
-        |> with_previous_messages(session.run_id)
-        |> Keyword.put(:subscriber, subscriber)
+        run_opts =
+          session.run_opts
+          |> with_previous_messages(session.run_id)
+          |> Keyword.put(:subscriber, subscriber)
 
-      case Ear.start_run(prompt, run_opts) do
-        {:ok, run_id, _pid} -> {%{session | run_id: run_id}, :ok}
-        error -> {session, error}
+        case Ear.start_run(prompt, run_opts) do
+          {:ok, run_id, _pid} -> {%{session | run_id: run_id}, :ok}
+          error -> {session, error}
+        end
       end
     end
   end

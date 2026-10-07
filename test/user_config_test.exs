@@ -50,6 +50,13 @@ defmodule Ear.UserConfigTest do
     assert config.models["providers"]["openai"]["apiEnvKey"] == "OPENAI_API_KEY"
   end
 
+  test "TUI gives project inspection enough tool-call budget by default", %{dir: dir} do
+    assert {:ok, _} = User.load(directory: dir, env: %{})
+    assert {:ok, opts} = User.prepare_tui(config_dir: dir)
+    assert opts[:max_turns] == 16
+    assert opts[:max_tool_calls] == 64
+  end
+
   test "never replaces existing files when the environment changes", %{dir: dir} do
     assert {:ok, first} = User.load(directory: dir, env: %{})
     original = Map.new(["models.yaml", "settings.yaml"], &{&1, File.read!(Path.join(dir, &1))})

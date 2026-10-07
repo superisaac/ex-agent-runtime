@@ -15,6 +15,7 @@ defmodule Ear.TUI.Fullscreen do
             height: 24,
             status: "Ready",
             ansi: true,
+            verbose: false,
             transcript_limit: 200
 
   @type t :: %__MODULE__{}
@@ -54,7 +55,10 @@ defmodule Ear.TUI.Fullscreen do
         |> Keyword.put(:run_opts, opts)
 
       session = Session.new(session_opts)
-      state = new(Keyword.take(opts, [:width, :height, :transcript_limit]) ++ [ansi: ansi])
+
+      state =
+        new(Keyword.take(opts, [:width, :height, :transcript_limit, :verbose]) ++ [ansi: ansi])
+
       send(input_pid, :read)
       render(state)
       loop(session, state)
@@ -256,6 +260,7 @@ defmodule Ear.TUI.Fullscreen do
       width: Keyword.get(opts, :width, 80),
       height: Keyword.get(opts, :height, 24),
       ansi: Keyword.get(opts, :ansi, true),
+      verbose: Keyword.get(opts, :verbose, false),
       transcript_limit: Keyword.get(opts, :transcript_limit, 200)
     }
   end
@@ -307,10 +312,10 @@ defmodule Ear.TUI.Fullscreen do
   def handle_event(%__MODULE__{} = state, %{type: :run_started}), do: %{state | status: "Running"}
 
   def handle_event(%__MODULE__{} = state, %{type: :tool_call_started, payload: %{name: name}}),
-    do: %{state | status: "Tool: #{name}"}
+    do: if(state.verbose, do: %{state | status: "Tool: #{name}"}, else: state)
 
   def handle_event(%__MODULE__{} = state, %{type: :tool_call_completed}),
-    do: %{state | status: "Running"}
+    do: if(state.verbose, do: %{state | status: "Running"}, else: state)
 
   def handle_event(%__MODULE__{} = state, %{type: :run_completed}), do: %{state | status: "Ready"}
 

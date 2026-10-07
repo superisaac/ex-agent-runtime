@@ -9,7 +9,7 @@ defmodule Mix.Tasks.Ear do
       Mix.shell().info(
         "Usage: mix ear [options]\n\n" <>
           "Starts the interactive ear terminal UI.\n\n" <>
-          "Options:\n  --endpoint URL\n  --model NAME\n  --skill-root PATH (repeatable)\n  --no-ansi\n  --fullscreen\n  -h, --help"
+          "Options:\n  --endpoint URL\n  --model NAME\n  --workspace DIR\n  --skill-root PATH (repeatable)\n  --no-ansi\n  --fullscreen\n  --verbose\n  -h, --help"
       )
 
       :ok
@@ -18,9 +18,11 @@ defmodule Mix.Tasks.Ear do
              strict: [
                endpoint: :string,
                model: :string,
+               workspace: :string,
                skill_root: :keep,
                no_ansi: :boolean,
-               fullscreen: :boolean
+               fullscreen: :boolean,
+               verbose: :boolean
              ]
            ) do
         {opts, [], []} -> start_ui(opts)
@@ -41,6 +43,8 @@ defmodule Mix.Tasks.Ear do
 
     opts = if cli_opts[:no_ansi], do: [{:ansi, false} | opts], else: opts
     opts = if cli_opts[:fullscreen], do: [{:fullscreen, true} | opts], else: opts
+    opts = if cli_opts[:verbose], do: [{:verbose, true} | opts], else: opts
+    opts = if cli_opts[:workspace], do: [{:workspace, cli_opts[:workspace]} | opts], else: opts
 
     opts =
       if cli_opts[:skill_root], do: [{:skill_roots, cli_opts[:skill_root]} | opts], else: opts
