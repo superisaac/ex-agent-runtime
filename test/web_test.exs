@@ -6,7 +6,16 @@ defmodule Ear.WebTest do
 
     def complete(adapter, request, _context) do
       send(adapter.owner, {:request, request})
-      {:ok, %{text: "Hello <script>"}, adapter}
+
+      {:ok,
+       %{
+         text: "Hello <script>",
+         usage: %{
+           "prompt_tokens" => 11,
+           "completion_tokens" => 7,
+           "prompt_tokens_details" => %{"cached_tokens" => 3}
+         }
+       }, adapter}
     end
   end
 
@@ -63,6 +72,7 @@ defmodule Ear.WebTest do
     assert state["status"] == "completed"
     assert List.last(state["messages"])["content"] == "Hello <script>"
     assert state["turns"] == 1
+    assert state["usage"] == %{"input" => 11, "output" => 7, "cached" => 3}
   end
 
   test "retains conversation context and clears it for a new conversation" do
@@ -76,6 +86,7 @@ defmodule Ear.WebTest do
     assert_receive {:request, request}
     assert Enum.map(request.messages, & &1.content) == ["First", "Hello <script>", "Second"]
     await_status(:completed)
+    assert Ear.Web.Session.state().usage == %{input: 22, output: 14, cached: 6}
     assert :ok = Ear.Web.Session.clear()
     assert %{status: :idle, messages: [], run_id: nil} = Ear.Web.Session.state()
   end
@@ -138,6 +149,7 @@ defmodule Ear.WebTest do
 
     assert_raise Mix.Error, fn -> Mix.Tasks.Ear.Web.run(["--port", "0"]) end
     assert_raise Mix.Error, fn -> Mix.Tasks.Ear.Web.run(["--unknown"]) end
+    assert_raise Mix.Error, fn -> Mix.Tasks.Ear.Web.run(["--model-timeout", "-1"]) end
   end
 
   defp call(method, path, body \\ nil) do

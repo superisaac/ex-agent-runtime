@@ -5,9 +5,12 @@ defmodule Mix.Tasks.Ear.Web do
   Starts the Phoenix web UI at http://localhost:9000.
 
       mix ear.web [--workspace DIR] [--endpoint URL] [--model NAME]
-                  [--skill-root PATH] [--port PORT]
+                  [--skill-root PATH] [--port PORT] [--model-timeout MS]
+                  [--verbose]
 
   Skill roots may be repeated. Uses the same user configuration as `mix ear`.
+  Model timeout defaults to 120000 ms; for streaming, it limits inactivity.
+  Debug logs are hidden by default; pass --verbose to show them.
   """
 
   @impl true
@@ -21,12 +24,19 @@ defmodule Mix.Tasks.Ear.Web do
                endpoint: :string,
                model: :string,
                skill_root: :keep,
-               port: :integer
+               port: :integer,
+               model_timeout: :integer,
+               verbose: :boolean
              ]
            ) do
         {opts, [], []} ->
+          Logger.configure(level: if(Keyword.get(opts, :verbose, false), do: :debug, else: :info))
           port = Keyword.get(opts, :port, 9000)
           if port < 1 or port > 65_535, do: Mix.raise("Port must be between 1 and 65535")
+
+          if opts[:model_timeout] && opts[:model_timeout] <= 0,
+            do: Mix.raise("Model timeout must be a positive number of milliseconds")
+
           Mix.Task.run("app.start")
           roots = Keyword.get_values(opts, :skill_root)
           opts = Keyword.delete(opts, :skill_root)

@@ -21,6 +21,7 @@ defmodule Ear.Web.Session do
        events: [],
        turns: 0,
        tool_calls: 0,
+       usage: %{input: 0, output: 0, cached: 0},
        error: nil
      }}
   end
@@ -39,6 +40,7 @@ defmodule Ear.Web.Session do
         :events,
         :turns,
         :tool_calls,
+        :usage,
         :error
       ])
 
@@ -94,6 +96,7 @@ defmodule Ear.Web.Session do
          events: [],
          turns: 0,
          tool_calls: 0,
+         usage: %{input: 0, output: 0, cached: 0},
          error: nil
      }}
   end
@@ -128,13 +131,59 @@ defmodule Ear.Web.Session do
   defp consume(%{type: :tool_call_started}, state),
     do: %{state | tool_calls: state.tool_calls + 1}
 
-  defp consume(%{type: :run_completed}, state), do: %{state | status: :completed}
+  defp consume(%{type: :run_completed, payload: payload}, state) do
+    usage = normalize_usage(payload[:usage] || payload["usage"])
+    %{state | status: :completed, usage: add_usage(state.usage, usage)}
+  end
+
   defp consume(%{type: :run_cancelled}, state), do: %{state | status: :cancelled}
 
   defp consume(%{type: :run_failed, payload: payload}, state),
     do: %{state | status: :failed, error: inspect(payload[:reason])}
 
   defp consume(_event, state), do: state
+
+  defp normalize_usage(nil), do: %{input: 0, output: 0, cached: 0}
+
+  defp normalize_usage(usage) when is_map(usage) do
+    details = usage[:prompt_tokens_details] || usage["prompt_tokens_details"] || %{}
+
+    %{
+      input: usage_value(usage, [:input_tokens, "input_tokens", :prompt_tokens, "prompt_tokens"]),
+      output:
+        usage_value(usage, [
+          :output_tokens,
+          "output_tokens",
+          :completion_tokens,
+          "completion_tokens"
+        ]),
+      cached:
+        usage_value(details, [:cached_tokens, "cached_tokens"], nil) ||
+          usage_value(
+            usage,
+            [
+              :cached_tokens,
+              "cached_tokens",
+              :cache_read_input_tokens,
+              "cache_read_input_tokens"
+            ],
+            0
+          )
+    }
+  end
+
+  defp normalize_usage(_usage), do: %{input: 0, output: 0, cached: 0}
+
+  defp usage_value(usage, keys, default \\ 0),
+    do: Enum.find_value(keys, default, &Map.get(usage, &1))
+
+  defp add_usage(total, current) do
+    %{
+      input: total.input + current.input,
+      output: total.output + current.output,
+      cached: total.cached + current.cached
+    }
+  end
 
   defp sync_metrics(%{session: %{run_id: nil}} = state), do: state
 

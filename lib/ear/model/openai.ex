@@ -1,6 +1,13 @@
 defmodule Ear.Model.OpenAI do
   @behaviour Ear.Model.Adapter
-  @moduledoc "OpenAI-compatible chat completion adapter using OTP HTTP clients."
+  @moduledoc """
+  OpenAI-compatible chat completion adapter using OTP HTTP clients.
+
+  `timeout` bounds complete/buffered HTTP requests. For live streams it bounds
+  connection establishment and inactivity between HTTP stream messages, rather
+  than the total response duration. Live streams finish at the SSE `[DONE]`
+  marker and close the HTTP request on completion, timeout, or cancellation.
+  """
   defstruct endpoint: "https://api.openai.com/v1/chat/completions",
             api_key: nil,
             model: "gpt-4o-mini",
@@ -121,97 +128,74 @@ defmodule Ear.Model.OpenAI do
     case :httpc.request(
            :post,
            {String.to_charlist(adapter.endpoint), headers, ~c"application/json", body},
-           [{:timeout, adapter.timeout}],
+           [{:timeout, :infinity}, {:connect_timeout, adapter.timeout}],
            [{:sync, false}, {:stream, :self}]
          ) do
-      {:ok, request_id} -> receive_stream(request_id, owner, token, <<>>, [], nil)
-      {:error, reason} -> {:error, {:transport, reason}}
+      {:ok, request_id} ->
+        caller = self()
+
+        # The model task can be killed on cancellation, bypassing its after block.
+        watcher =
+          spawn(fn ->
+            ref = Process.monitor(caller)
+
+            receive do
+              {:DOWN, ^ref, :process, ^caller, _reason} -> :httpc.cancel_request(request_id)
+              :done -> Process.demonitor(ref, [:flush])
+            end
+          end)
+
+        try do
+          receive_stream(request_id, owner, token, <<>>, [], nil, adapter.timeout)
+        after
+          :httpc.cancel_request(request_id)
+          send(watcher, :done)
+        end
+
+      {:error, reason} ->
+        {:error, {:transport, reason}}
     end
   end
 
-  defp receive_stream(request_id, owner, token, buffer, chunks, status) do
+  defp receive_stream(request_id, owner, token, buffer, chunks, status, timeout) do
     receive do
-      message -> receive_stream_message(message, request_id, owner, token, buffer, chunks, status)
+      {:http, {^request_id, :stream_start, headers}} ->
+        receive_stream(request_id, owner, token, buffer, chunks, stream_status(headers), timeout)
+
+      {:http, {^request_id, :stream, data}} when is_binary(data) ->
+        {new_buffer, new_chunks, done?} = parse_stream_chunk(buffer <> data, chunks)
+
+        if new_chunks != chunks,
+          do: send(owner, {:model_stream_chunk, token, Enum.drop(new_chunks, length(chunks))})
+
+        if done? do
+          stream_result(status, new_chunks)
+        else
+          receive_stream(request_id, owner, token, new_buffer, new_chunks, status, timeout)
+        end
+
+      {:http, {^request_id, :stream_end, _headers}} ->
+        {_buffer, final_chunks, _done?} = parse_stream_chunk(buffer <> "\n", chunks)
+
+        if final_chunks != chunks,
+          do: send(owner, {:model_stream_chunk, token, Enum.drop(final_chunks, length(chunks))})
+
+        stream_result(status, final_chunks)
+
+      {:http, {^request_id, :error, reason}} ->
+        {:error, {:transport, reason}}
+
+      {:http, {^request_id, {:error, reason}}} ->
+        {:error, {:transport, reason}}
     after
-      60_000 -> {:error, {:transport, :timeout}}
+      timeout ->
+        {:error, {:transport, :timeout}}
     end
   end
 
-  defp receive_stream_message(
-         {:http, {request_id, :stream_start, headers}},
-         request_id,
-         owner,
-         token,
-         buffer,
-         chunks,
-         _status
-       ) do
-    receive_stream(request_id, owner, token, buffer, chunks, stream_status(headers))
-  end
-
-  defp receive_stream_message(
-         {:http, {request_id, :stream, data}},
-         request_id,
-         owner,
-         token,
-         buffer,
-         chunks,
-         status
-       )
-       when is_binary(data) do
-    {new_buffer, new_chunks} = parse_stream_chunk(buffer <> data, chunks)
-
-    if new_chunks != chunks,
-      do: send(owner, {:model_stream_chunk, token, Enum.drop(new_chunks, length(chunks))})
-
-    receive_stream(request_id, owner, token, new_buffer, new_chunks, status)
-  end
-
-  defp receive_stream_message(
-         {:http, {request_id, :stream_end, _headers}},
-         request_id,
-         owner,
-         token,
-         buffer,
-         chunks,
-         status
-       ) do
-    {_buffer, final_chunks} = parse_stream_chunk(buffer <> "\n", chunks)
-
-    if final_chunks != chunks,
-      do: send(owner, {:model_stream_chunk, token, Enum.drop(final_chunks, length(chunks))})
-
-    case status do
-      200 -> {:ok, %{chunks: final_chunks}}
-      nil -> {:error, {:transport, :missing_status}}
-      code -> {:error, {:provider, code, %{}}}
-    end
-  end
-
-  defp receive_stream_message(
-         {:http, {request_id, :error, reason}},
-         request_id,
-         _owner,
-         _token,
-         _buffer,
-         _chunks,
-         _status
-       ),
-       do: {:error, {:transport, reason}}
-
-  defp receive_stream_message(
-         {:http, {request_id, {:error, reason}}},
-         request_id,
-         _owner,
-         _token,
-         _buffer,
-         _chunks,
-         _status
-       ),
-       do: {:error, {:transport, reason}}
-
-  defp receive_stream_message(_message, request_id, owner, token, buffer, chunks, status),
-    do: receive_stream(request_id, owner, token, buffer, chunks, status)
+  defp stream_result(200, chunks), do: {:ok, %{chunks: chunks}}
+  defp stream_result(nil, _chunks), do: {:error, {:transport, :missing_status}}
+  defp stream_result(code, _chunks), do: {:error, {:provider, code, %{}}}
 
   defp parse_stream_chunk(data, chunks) do
     lines = String.split(data, "\n")
@@ -225,11 +209,13 @@ defmodule Ear.Model.OpenAI do
       |> Enum.flat_map(fn line ->
         case decode_json(line) do
           {:ok, %{"choices" => [%{"delta" => delta} | _]}} -> delta_chunks(delta)
+          {:ok, %{"usage" => usage}} when is_map(usage) -> [%{type: :usage, usage: usage}]
           _ -> []
         end
       end)
 
-    {tail, chunks ++ additions}
+    done? = Enum.any?(complete, &(sse_data(String.trim_trailing(&1, "\r")) == ["[DONE]"]))
+    {tail, chunks ++ additions, done?}
   end
 
   defp live_stream?(context), do: is_pid(context[:stream_owner]) and context[:stream_token] != nil

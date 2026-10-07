@@ -9,22 +9,20 @@
   <script src="/app.js" defer></script>
 </head>
 <body>
-  <header><div class="brand"><span class="mark">E</span><strong>EAR</strong><span>Agent workspace</span></div><span id="connection" role="status">Connecting</span></header>
+  <header><div class="brand"><span class="mark">E</span><strong>EAR</strong><span>Agent workspace</span></div><div class="nav-actions"><button id="toggle-sidebar" type="button" aria-controls="sidebar" aria-expanded="true">Hide sidebar</button><button id="clear" title="Start a new conversation" aria-label="Start a new conversation"><span class="icon plus" aria-hidden="true"></span> New conversation</button><span id="connection" role="status">Connecting</span></div></header>
   <main>
     <section class="conversation">
-      <div class="section-heading"><h1>Conversation</h1><button id="clear" title="Start a new conversation" aria-label="Start a new conversation"><span class="icon plus" aria-hidden="true"></span> New conversation</button></div>
       <div id="messages" role="log" aria-label="Conversation" aria-live="polite"><div class="empty">No messages yet</div></div>
       <form id="prompt-form">
-        <label for="prompt">Message</label>
-        <textarea id="prompt" name="prompt" placeholder="Ask about your workspace..." rows="3" required></textarea>
+        <textarea id="prompt" name="prompt" aria-label="Prompt" placeholder="Ask about your workspace..." rows="3" required></textarea>
         <div class="composer-actions"><span id="error" role="alert"></span><button id="cancel" type="button" disabled><span class="icon square" aria-hidden="true"></span> Stop</button><button id="send" class="primary" type="submit"><span class="icon arrow" aria-hidden="true"></span> Send</button></div>
       </form>
     </section>
-    <aside>
+    <aside id="sidebar">
       <div class="section-heading"><h2>Current run</h2><span id="status" class="status">Idle</span></div>
       <dl><dt>Workspace</dt><dd id="workspace">-</dd><dt>Model</dt><dd id="model">-</dd><dt>Run ID</dt><dd id="run-id">-</dd></dl>
       <div class="metrics"><div><span id="turns">0</span><span>Turns</span></div><div><span id="tools">0</span><span>Tool calls</span></div></div>
-      <h2 class="activity-title">Activity</h2><ol id="events"><li class="muted">No activity</li></ol>
+      <h2 class="activity-title">Usage</h2><div class="usage"><div><span id="input-tokens">0</span><span>Input tokens</span></div><div><span id="output-tokens">0</span><span>Output tokens</span></div><div><span id="cached-tokens">0</span><span>Cached tokens</span></div></div>
     </aside>
   </main>
 </body>

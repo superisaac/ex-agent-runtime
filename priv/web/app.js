@@ -4,7 +4,28 @@ let busy = false;
 let pending = false;
 let connected = false;
 let lastConversation = '';
-let lastEvents = '';
+
+function setSidebarVisible(visible, persist = true) {
+  document.querySelector('main').classList.toggle('sidebar-hidden', !visible);
+  const toggle = byId('toggle-sidebar');
+  toggle.setAttribute('aria-expanded', String(visible));
+  toggle.textContent = visible ? 'Hide sidebar' : 'Show sidebar';
+  if (persist) {
+    try {
+      localStorage.setItem('ear.sidebar', visible ? 'visible' : 'hidden');
+    } catch (_) {
+      // Storage can be unavailable in private browsing contexts.
+    }
+  }
+}
+
+let sidebarVisible = true;
+try {
+  sidebarVisible = localStorage.getItem('ear.sidebar') !== 'hidden';
+} catch (_) {
+  // Storage can be unavailable in private browsing contexts.
+}
+setSidebarVisible(sidebarVisible, false);
 
 function controls() {
   byId('send').disabled = !connected || busy || pending;
@@ -44,6 +65,10 @@ function render(state) {
   byId('run-id').textContent = state.run_id || '-';
   byId('turns').textContent = state.turns;
   byId('tools').textContent = state.tool_calls;
+  const usage = state.usage || {};
+  byId('input-tokens').textContent = usage.input || 0;
+  byId('output-tokens').textContent = usage.output || 0;
+  byId('cached-tokens').textContent = usage.cached || 0;
   if (state.error) byId('error').textContent = state.error;
 
   const conversation = JSON.stringify([state.messages, state.partial]);
@@ -63,26 +88,6 @@ function render(state) {
     lastConversation = conversation;
   }
 
-  const events = state.events.filter(event => event.type !== 'message_delta');
-  const eventKey = JSON.stringify(events);
-  if (eventKey !== lastEvents) {
-    byId('events').replaceChildren();
-    events.forEach(event => {
-      const row = document.createElement('li');
-      const time = document.createElement('time');
-      time.textContent = new Date(event.occurred_at).toLocaleTimeString();
-      row.append(time, document.createTextNode(event.type.replaceAll('_', ' ')));
-      const details = document.createElement('details');
-      const summary = document.createElement('summary');
-      summary.textContent = event.payload.name || 'Details';
-      const payload = document.createElement('pre');
-      payload.textContent = JSON.stringify(event.payload, null, 2);
-      details.append(summary, payload);
-      row.append(details);
-      byId('events').append(row);
-    });
-    lastEvents = eventKey;
-  }
 }
 
 async function refresh() {
@@ -120,6 +125,7 @@ byId('prompt-form').addEventListener('submit', event => {
   const prompt = byId('prompt').value.trim();
   if (prompt && !busy && !pending) action('/api/prompt', {prompt});
 });
+byId('toggle-sidebar').addEventListener('click', () => setSidebarVisible(sidebarVisible = !sidebarVisible));
 byId('cancel').addEventListener('click', () => action('/api/cancel'));
 byId('clear').addEventListener('click', () => action('/api/clear'));
 async function poll() {

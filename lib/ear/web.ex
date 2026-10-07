@@ -3,6 +3,8 @@ defmodule Ear.Web do
   use Supervisor
 
   def start_link(opts \\ []) do
+    opts = Keyword.put_new(opts, :model_timeout, 120_000)
+
     with {:ok, opts} <- Ear.Config.User.prepare_tui(opts) do
       workspace = Ear.TUI.workspace(opts)
 

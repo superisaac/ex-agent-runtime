@@ -484,6 +484,11 @@ defmodule Ear.Agent.Loop do
         transcript = Transcript.append(state.transcript, Message.new(:assistant, text))
         state = emit_to_subscribers(state, :message_completed, %{text: text})
 
+        payload = %{text: text}
+
+        payload =
+          if usage = usage_from_chunks(chunks), do: Map.put(payload, :usage, usage), else: payload
+
         finish(
           %{
             state
@@ -492,7 +497,7 @@ defmodule Ear.Agent.Loop do
               request: refresh_request(state.request, transcript, nil)
           },
           :run_completed,
-          %{text: text}
+          payload
         )
       end
     end
@@ -512,6 +517,13 @@ defmodule Ear.Agent.Loop do
         args: decode_tool_arguments(args)
       }
     end)
+  end
+
+  defp usage_from_chunks(chunks) do
+    case Enum.find(chunks, &(&1[:type] == :usage)) do
+      %{usage: usage} when is_map(usage) -> usage
+      _ -> nil
+    end
   end
 
   defp decode_tool_arguments(value) do

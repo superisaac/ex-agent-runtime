@@ -138,6 +138,7 @@ defmodule Ear.Config.User do
         Ear.Model.OpenAI.new(
           endpoint: Keyword.get(opts, :endpoint, endpoint(provider["baseUrl"])),
           model: model_name,
+          timeout: Keyword.get(opts, :model_timeout, 30_000),
           api_key: System.get_env(provider["apiEnvKey"])
         )
 

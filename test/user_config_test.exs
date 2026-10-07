@@ -57,6 +57,12 @@ defmodule Ear.UserConfigTest do
     assert opts[:max_tool_calls] == 64
   end
 
+  test "passes model timeout to the configured adapter", %{dir: dir} do
+    assert {:ok, _} = User.load(directory: dir, env: %{})
+    assert {:ok, opts} = User.prepare_tui(config_dir: dir, model_timeout: 120_000)
+    assert opts[:adapter].timeout == 120_000
+  end
+
   test "never replaces existing files when the environment changes", %{dir: dir} do
     assert {:ok, first} = User.load(directory: dir, env: %{})
     original = Map.new(["models.yaml", "settings.yaml"], &{&1, File.read!(Path.join(dir, &1))})

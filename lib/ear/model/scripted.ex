@@ -14,9 +14,13 @@ defmodule Ear.Model.Scripted do
       {:ok, %{tool_calls: calls} = response, next_adapter} when calls != [] ->
         {:ok, response, next_adapter}
 
-      {:ok, %{text: text}, next_adapter} when is_binary(text) ->
-        {:ok, %{chunks: Enum.map(String.graphemes(text), &%{type: :text_delta, text: &1})},
-         next_adapter}
+      {:ok, %{text: text} = response, next_adapter} when is_binary(text) ->
+        {:ok,
+         Map.put(
+           response,
+           :chunks,
+           Enum.map(String.graphemes(text), &%{type: :text_delta, text: &1})
+         ), next_adapter}
 
       {:ok, response, next_adapter} ->
         {:ok, response, next_adapter}

@@ -229,6 +229,16 @@ emitted and retained in the assistant transcript entry before tool execution.
 The OpenAI-compatible adapter reads SSE response bodies incrementally and
 forwards parsed deltas to the agent loop as soon as complete network chunks
 arrive. Partial TCP frames are buffered until their SSE lines are complete.
+Live streaming uses the OpenAI adapter's `timeout` as an inactivity limit,
+reset whenever HTTP stream data arrives, instead of a total request deadline.
+The stream finishes at `[DONE]`, even if the provider keeps the connection open.
+Timeout and cancellation close the pending HTTP request. The web UI defaults
+to 120,000 milliseconds; pass `mix ear.web --model-timeout 300000` to increase
+this to five minutes. Complete and buffered model requests use a total HTTP
+timeout. This model timeout is separate from the synchronous caller timeout
+described below.
+
+`mix ear.web` suppresses debug logs by default. Pass `--verbose` to show them.
 
 Runtime failures return `{:error, reason, events}` from `run_with_events/2`.
 Validation failures return `{:error, reason}` before a run starts. `run/2`

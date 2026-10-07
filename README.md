@@ -26,10 +26,16 @@ Follow-up prompts include the previous conversation. Runs and conversation state
 are held in memory for the lifetime of the server.
 
 The task accepts `--endpoint URL`, `--model NAME`, repeated `--skill-root PATH`,
-and `--port PORT` (default: `9000`). The workspace defaults to the current
-directory. It uses the same `~/.ear/agent` model configuration and read-only
+`--port PORT` (default: `9000`), and `--verbose`. The workspace defaults to the current
+directory. Debug logs are hidden by default; pass `--verbose` to show them. It uses the same `~/.ear/agent` model configuration and read-only
 `file_list` / `file_read` tools as the terminal UI. Set the configured API key
 environment variable before starting. Run `mix ear.web --help` for usage.
+
+Model requests in the web UI default to a 120-second timeout. Set
+`--model-timeout 300000` to allow five minutes. For live streaming this is an
+inactivity timeout, reset whenever HTTP stream data arrives, so an active long
+reply can continue beyond it. A stream ends when the provider sends `[DONE]`.
+For non-streaming requests the timeout limits the entire HTTP request.
 
 The default adapter is OpenAI-compatible and reads credentials from the
 environment. A scripted adapter can be supplied for deterministic local

@@ -281,6 +281,141 @@ defmodule Ear.OpenAITest do
     Task.await(server)
   end
 
+  test "active streams can exceed the configured timeout" do
+    {adapter, server} =
+      stream_server(400, fn socket ->
+        for _ <- 1..8 do
+          send_stream_data(socket, ~s(data: {"choices":[{"delta":{"content":"x"}}]}\n\n))
+          Process.sleep(80)
+        end
+
+        send_stream_data(socket, "data: [DONE]\n\n")
+      end)
+
+    assert {:ok, %{chunks: chunks}} =
+             Ear.Model.OpenAI.stream(adapter, %{prompt: "hi"},
+               stream_owner: self(),
+               stream_token: make_ref()
+             )
+
+    assert Enum.map_join(chunks, & &1.text) == "xxxxxxxx"
+    Task.await(server)
+  end
+
+  test "stalled streams use the configured inactivity timeout and close the request" do
+    owner = self()
+
+    {adapter, server} =
+      stream_server(200, fn socket ->
+        send_stream_data(socket, ~s(data: {"choices":[{"delta":{"content":"partial"}}]}\n\n))
+        send(owner, {:socket_closed, :gen_tcp.recv(socket, 0, 2_000)})
+      end)
+
+    token = make_ref()
+
+    task =
+      Task.async(fn ->
+        Ear.Model.OpenAI.stream(adapter, %{prompt: "hi"},
+          stream_owner: owner,
+          stream_token: token
+        )
+      end)
+
+    assert_receive {:model_stream_chunk, ^token, [%{text: "partial"}]}, 1_000
+    assert {:error, {:transport, :timeout}} = Task.await(task, 1_000)
+    assert_receive {:socket_closed, {:error, :closed}}, 1_000
+    Task.await(server)
+  end
+
+  test "DONE completes a stream even when the provider leaves the connection open" do
+    owner = self()
+
+    {adapter, server} =
+      stream_server(2_000, fn socket ->
+        send_stream_data(socket, ~s(data: {"choices":[{"delta":{"content":"done"}}]}\n\n))
+        send_stream_data(socket, "data: [DO")
+        send_stream_data(socket, "NE]\n\n")
+        send(owner, {:socket_closed, :gen_tcp.recv(socket, 0, 2_000)})
+      end)
+
+    task =
+      Task.async(fn ->
+        Ear.Model.OpenAI.stream(adapter, %{prompt: "hi"},
+          stream_owner: owner,
+          stream_token: make_ref()
+        )
+      end)
+
+    assert {:ok, %{chunks: [%{text: "done"}]}} = Task.await(task, 1_000)
+    assert_receive {:socket_closed, {:error, :closed}}, 1_000
+    Task.await(server)
+  end
+
+  test "cancelling the model task closes its streaming HTTP request" do
+    owner = self()
+
+    {adapter, server} =
+      stream_server(2_000, fn socket ->
+        send_stream_data(socket, ~s(data: {"choices":[{"delta":{"content":"partial"}}]}\n\n))
+        send(owner, {:socket_closed, :gen_tcp.recv(socket, 0, 2_000)})
+      end)
+
+    token = make_ref()
+
+    task =
+      Task.async(fn ->
+        Ear.Model.OpenAI.stream(adapter, %{prompt: "hi"},
+          stream_owner: owner,
+          stream_token: token
+        )
+      end)
+
+    assert_receive {:model_stream_chunk, ^token, [%{text: "partial"}]}, 1_000
+    Task.shutdown(task, :brutal_kill)
+    assert_receive {:socket_closed, {:error, :closed}}, 1_000
+    Task.await(server)
+  end
+
+  defp stream_server(timeout, serve) do
+    {:ok, listener} =
+      :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true, ip: {127, 0, 0, 1}])
+
+    on_exit(fn -> :gen_tcp.close(listener) end)
+    {:ok, {_ip, port}} = :inet.sockname(listener)
+
+    server =
+      Task.async(fn ->
+        {:ok, socket} = :gen_tcp.accept(listener)
+        {headers, initial} = read_headers(socket, "")
+        [_, length] = Regex.run(~r/content-length: (\d+)/i, headers)
+        read_body(socket, initial, String.to_integer(length))
+
+        :ok =
+          :gen_tcp.send(
+            socket,
+            "HTTP/1.1 200 OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\n\r\n"
+          )
+
+        Process.sleep(20)
+        serve.(socket)
+        :gen_tcp.close(socket)
+      end)
+
+    adapter =
+      Ear.Model.OpenAI.new(
+        api_key: "test",
+        endpoint: "http://127.0.0.1:#{port}/v1/chat/completions",
+        timeout: timeout
+      )
+
+    {adapter, server}
+  end
+
+  defp send_stream_data(socket, data) do
+    :ok =
+      :gen_tcp.send(socket, Integer.to_string(byte_size(data), 16) <> "\r\n" <> data <> "\r\n")
+  end
+
   defp read_headers(socket, data) do
     case String.split(data, "\r\n\r\n", parts: 2) do
       [headers, body] ->
