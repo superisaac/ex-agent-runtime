@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="__CSRF_TOKEN__">
+  <title>EAR Workspace</title>
+  <link rel="stylesheet" href="/app.css">
+  <script src="/app.js" defer></script>
+</head>
+<body>
+  <header><div class="brand"><span class="mark">E</span><strong>EAR</strong><span>Agent workspace</span></div><span id="connection" role="status">Connecting</span></header>
+  <main>
+    <section class="conversation">
+      <div class="section-heading"><h1>Conversation</h1><button id="clear" title="Start a new conversation" aria-label="Start a new conversation"><span class="icon plus" aria-hidden="true"></span> New conversation</button></div>
+      <div id="messages" role="log" aria-label="Conversation" aria-live="polite"><div class="empty">No messages yet</div></div>
+      <form id="prompt-form">
+        <label for="prompt">Message</label>
+        <textarea id="prompt" name="prompt" placeholder="Ask about your workspace..." rows="3" required></textarea>
+        <div class="composer-actions"><span id="error" role="alert"></span><button id="cancel" type="button" disabled><span class="icon square" aria-hidden="true"></span> Stop</button><button id="send" class="primary" type="submit"><span class="icon arrow" aria-hidden="true"></span> Send</button></div>
+      </form>
+    </section>
+    <aside>
+      <div class="section-heading"><h2>Current run</h2><span id="status" class="status">Idle</span></div>
+      <dl><dt>Workspace</dt><dd id="workspace">-</dd><dt>Model</dt><dd id="model">-</dd><dt>Run ID</dt><dd id="run-id">-</dd></dl>
+      <div class="metrics"><div><span id="turns">0</span><span>Turns</span></div><div><span id="tools">0</span><span>Tool calls</span></div></div>
+      <h2 class="activity-title">Activity</h2><ol id="events"><li class="muted">No activity</li></ol>
+    </aside>
+  </main>
+</body>
+</html>

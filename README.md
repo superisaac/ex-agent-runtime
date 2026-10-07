@@ -11,6 +11,26 @@ mix deps.get
 mix test
 ```
 
+## Web Interface
+
+Start the Phoenix web interface with:
+
+```sh
+mix ear.web --workspace /path/to/project
+```
+
+Open <http://localhost:9000> to send prompts, view streaming assistant output,
+inspect run status and tool events, cancel a run, or start a new conversation.
+The server listens on `127.0.0.1` and shares one conversation across browser tabs.
+Follow-up prompts include the previous conversation. Runs and conversation state
+are held in memory for the lifetime of the server.
+
+The task accepts `--endpoint URL`, `--model NAME`, repeated `--skill-root PATH`,
+and `--port PORT` (default: `9000`). The workspace defaults to the current
+directory. It uses the same `~/.ear/agent` model configuration and read-only
+`file_list` / `file_read` tools as the terminal UI. Set the configured API key
+environment variable before starting. Run `mix ear.web --help` for usage.
+
 The default adapter is OpenAI-compatible and reads credentials from the
 environment. A scripted adapter can be supplied for deterministic local
 development:

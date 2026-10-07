@@ -22,7 +22,11 @@ defmodule Ear.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:yaml_elixir, "~> 2.11"}
+      {:yaml_elixir, "~> 2.11"},
+      {:phoenix, "~> 1.8"},
+      {:phoenix_html, "~> 4.0"},
+      {:bandit, "~> 1.0"},
+      {:jason, "~> 1.4"}
     ]
   end
 end
