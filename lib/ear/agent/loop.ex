@@ -219,13 +219,13 @@ defmodule Ear.Agent.Loop do
       finish(state, :run_failed, %{reason: :max_output_chars, size: current_size + text_size})
     else
       state =
-        Enum.reduce(chunks, state, fn
-          %{type: :text_delta, text: text}, acc ->
-            emit_to_subscribers(acc, :message_delta, %{text: text})
-
-          _, acc ->
-            acc
-        end)
+        case Enum.map_join(chunks, "", fn
+               %{type: :text_delta, text: text} -> text
+               _ -> ""
+             end) do
+          "" -> state
+          text -> emit_to_subscribers(state, :message_delta, %{text: text})
+        end
 
       {:noreply,
        %{
