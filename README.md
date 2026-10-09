@@ -58,9 +58,9 @@ use a Pi-style `providers` registry with `baseUrl`, `api`, `apiEnvKey`, and
 never written to configuration. See [User Configuration](docs/usage.md#user-configuration)
 for the YAML format and precedence rules.
 The default renderer is quiet and shows assistant output without lifecycle
-diagnostics. Pass `verbose: true` to `Ear.TUI.start/1`, or use `mix ear
+diagnostics. Pass `verbose: true` to `Ear.TUI.start/1`, or use `mix ear.tui
 --verbose`, to display run, skill, and tool events.
-Use `mix ear --workspace /path/to/project` to choose the workspace inspected by
+Use `mix ear.tui --workspace /path/to/project` to choose the workspace inspected by
 the TUI; without it, the current directory is used.
 The line-oriented TUI enables Erlang terminal line history for the default
 terminal input, providing readline-style editing and history. Injected `input`
@@ -76,7 +76,10 @@ using the current working directory as the workspace. This lets the model
 inspect a project when asked to analyze it. `file_write` and `shell` remain
 explicit opt-in tools for library callers.
 
-For a full-screen terminal session, use `Ear.TUI.start(fullscreen: true)`.
+For a full-screen terminal session, use `Ear.TUI.start(fullscreen: true)`. The
+full-screen mode is implemented with the [TermUI](https://github.com/agentjido/term_ui)
+Elm runtime; injected `key_input` options continue to use the deterministic
+legacy backend for tests and embedding.
 It uses an alternate screen buffer, editable input, cursor movement, transcript
 scrolling, and live run status. `Ctrl-C` cancels an active run or exits an idle
 session; `Ctrl-L` redraws the screen.
@@ -125,11 +128,11 @@ Applications can inject a different auth adapter into
 The same UI can be launched directly from the shell:
 
 ```sh
-mix ear
+mix ear.tui
 ```
 
 The command also accepts `--endpoint URL`, `--model NAME`, repeated
-`--skill-root PATH`, `--no-ansi`, and `--fullscreen`.
+`--skill-root PATH`, `--no-ansi`, and `--verbose`.
 
 The command selects the OpenAI-compatible adapter and uses the configured
 environment variables. On a fresh checkout, run `mix compile` first to make

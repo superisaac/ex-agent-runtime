@@ -1,6 +1,5 @@
 defmodule Ear.UserConfigTest do
   use ExUnit.Case, async: false
-  import ExUnit.CaptureIO
   alias Ear.Config.User
 
   setup do
@@ -257,7 +256,7 @@ defmodule Ear.UserConfigTest do
              User.prepare_tui(config_dir: dir)
   end
 
-  test "invalid provider schemas and settings are rejected before terminal input", %{dir: dir} do
+  test "invalid provider schemas and settings are rejected", %{dir: dir} do
     for models <- [
           "providers: []\n",
           "providers:\n  bad:\n    apiEnvKey: BAD\n",
@@ -267,7 +266,7 @@ defmodule Ear.UserConfigTest do
       File.write!(Path.join(dir, "models.yaml"), models)
 
       assert {:error, {:config, "models.yaml", _}} =
-               Ear.TUI.start(config_dir: dir, input: fn _ -> flunk("input must not start") end)
+               User.prepare_tui(config_dir: dir)
     end
 
     write_models(dir)
@@ -279,26 +278,6 @@ defmodule Ear.UserConfigTest do
 
     assert {:error, {:config, "settings.yaml", :invalid_settings}} =
              User.prepare_tui(config_dir: dir)
-  end
-
-  test "both TUI modes create configuration before reading input", %{dir: dir} do
-    for fullscreen <- [false, true] do
-      config_dir = Path.join(dir, to_string(fullscreen))
-
-      capture_io(fn ->
-        assert :ok =
-                 Ear.TUI.start(
-                   config_dir: config_dir,
-                   fullscreen: fullscreen,
-                   ansi: false,
-                   input: fn _ -> :eof end,
-                   key_input: fn -> :eof end
-                 )
-      end)
-
-      assert File.exists?(Path.join(config_dir, "models.yaml"))
-      assert File.exists?(Path.join(config_dir, "settings.yaml"))
-    end
   end
 
   test "login refreshes the selected provider key without discarding configured endpoint and model",

@@ -31,7 +31,7 @@ Start the terminal UI with:
 
 ```sh
 mix compile
-mix ear
+mix ear.tui
 ```
 
 ### User Configuration
@@ -105,13 +105,13 @@ directory, or explicitly disable file initialization with `config: false`.
 The non-TUI run API continues to accept injected adapters and environment defaults.
 
 The Mix task accepts `--endpoint URL`, `--model NAME`, repeated
-`--workspace DIR`, `--skill-root PATH`, `--no-ansi`, `--fullscreen`, and
+`--workspace DIR`, `--skill-root PATH`, `--no-ansi`, and
 `--verbose` in addition to `--help`. The workspace defaults to the current
 directory and is passed to file tools and adapter context.
 
 The default TUI renderer is quiet: assistant text and terminal errors remain
 visible, while run, skill, and tool lifecycle events are suppressed. Pass
-`verbose: true` to `Ear.TUI.start/1`, or use `mix ear --verbose`, to display
+`verbose: true` to `Ear.TUI.start/1`, or use `mix ear.tui --verbose`, to display
 those diagnostics. Event subscribers still receive every structured event in
 both modes. After a terminal event, quiet mode redraws the `ear>` prompt. A
 blank line entered at the prompt is ignored rather than submitted as a model
@@ -173,7 +173,8 @@ the next prompt.
 On `/exit` or EOF, the TUI requests cancellation and waits briefly for the
 active run to reach a terminal state before shutting down its event renderer.
 
-Use `Ear.TUI.start(fullscreen: true)` for the full-screen terminal
+Use `Ear.TUI.start(fullscreen: true)` for the full-screen terminal. This mode
+uses the TermUI Elm runtime and renders complete `TermUI.Frame` values.
 mode. It provides an alternate screen buffer, editable input with arrow keys,
 Backspace, Delete, and Enter, plus Up/Down and PageUp/PageDown transcript
 scrolling. `Ctrl-L` redraws the screen. `Ctrl-C` cancels the active run or

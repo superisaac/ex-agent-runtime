@@ -8,7 +8,7 @@ defmodule Mix.Tasks.Ear.Web do
                   [--skill-root PATH] [--port PORT] [--model-timeout MS]
                   [--verbose]
 
-  Skill roots may be repeated. Uses the same user configuration as `mix ear`.
+  Skill roots may be repeated. Uses the same user configuration as `mix ear.tui`.
   Model timeout defaults to 120000 ms; for streaming, it limits inactivity.
   Debug logs are hidden by default; pass --verbose to show them.
   """

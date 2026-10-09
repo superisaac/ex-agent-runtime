@@ -26,7 +26,8 @@ defmodule Ear.MixProject do
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.0"},
       {:bandit, "~> 1.0"},
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
+      {:term_ui, "~> 2.0.0-rc.1"}
     ]
   end
 end

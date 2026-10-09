@@ -22,7 +22,10 @@ defmodule Ear.TUI.Fullscreen do
 
   alias Ear.TUI.{Session, Command}
 
-  def start(opts \\ []) do
+  def start(opts \\ []), do: Ear.TUI.TermUI.start(opts)
+
+  @doc false
+  def start_legacy(opts \\ []) do
     with {:ok, opts} <- Ear.Config.User.prepare_tui(opts), do: start_session(opts)
   end
 

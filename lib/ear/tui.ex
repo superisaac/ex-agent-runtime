@@ -22,7 +22,7 @@ defmodule Ear.TUI do
         )
 
       if Keyword.get(opts, :fullscreen, false) do
-        Ear.TUI.Fullscreen.start(Keyword.put(opts, :config, false))
+        Ear.TUI.TermUI.start(Keyword.put(opts, :config, false))
       else
         start_line_oriented(opts)
       end
